@@ -1,0 +1,677 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ============================================
+   SHADCN TAILWIND CSS (inlined for Turbopack compatibility)
+   ============================================ */
+
+@theme inline {
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/* shadcn custom variants */
+@custom-variant dark (&:is(.dark *));
+
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-unchecked {
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ============================================
+   DESIGN SYSTEM - Build AI Dashboard
+   ============================================
+
+   Typography Scale:
+   - Display (KPIs, hero numbers): Reports UI font, 48-72px
+   - H1 (Page titles): Reports UI font, 28-32px
+   - H2 (Section headers): Reports UI font, 20-24px
+   - H3 (Card titles): Reports UI font, 16-18px, semibold
+   - Body: Reports UI font, 14-16px
+   - Small: Reports UI font, 12-14px
+   - Caption: Reports UI font, 11-12px
+   - Mono (dense code/debug data): font-mono
+
+   Color Philosophy:
+   - Slate-based neutrals (more sophisticated than gray)
+   - Teal accent for brand identity (data/tech feel)
+   - Semantic colors with subtle background tints
+
+   ============================================ */
+
+@theme inline {
+  /* Core colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+
+  /* Typography - Reports UI font is the product default; mono stays for dense technical data */
+  --font-sans: var(--font-ui), "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-display: var(--font-ui), "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: var(--font-code), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Border radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Semantic tokens */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Chart colors */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0;
+
+  /* Backgrounds - warm white, not pure white */
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.15 0 0);
+
+  /* Cards - slightly elevated from background */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0 0);
+
+  /* Popover */
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+
+  /* Primary - black, clean and sharp */
+  --primary: oklch(0.15 0 0);
+  --primary-foreground: oklch(0.98 0 0);
+
+  /* Secondary - visible hover state */
+  --secondary: oklch(0.92 0.01 210);
+  --secondary-foreground: oklch(0.22 0.01 210);
+
+  /* Muted - for secondary text and backgrounds */
+  --muted: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+
+  /* Accent - neutral gray */
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.15 0 0);
+
+  /* Destructive - warm red, not alarming */
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.98 0.01 27);
+
+  /* Borders - subtle but visible */
+  --border: oklch(0.90 0 0);
+  --input: oklch(0.90 0 0);
+  --ring: oklch(0.15 0 0);
+
+  /* Chart colors - harmonious, professional */
+  --chart-1: oklch(0.30 0 0);       /* Dark gray - primary */
+  --chart-2: oklch(0.65 0.15 145);  /* Green - success */
+  --chart-3: oklch(0.70 0.15 75);   /* Yellow - warning */
+  --chart-4: oklch(0.62 0.18 25);   /* Orange - error */
+  --chart-5: oklch(0.58 0.15 270);  /* Purple - accent */
+
+  /* Sidebar */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.15 0 0);
+  --sidebar-primary: oklch(0.15 0 0);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-accent-foreground: oklch(0.15 0 0);
+  --sidebar-border: oklch(0.90 0 0);
+  --sidebar-ring: oklch(0.15 0 0);
+
+  /* Semantic status colors */
+  --success: oklch(0.60 0.18 145);
+  --success-foreground: oklch(0.25 0.05 145);
+  --success-muted: oklch(0.96 0.03 145);
+
+  --warning: oklch(0.70 0.15 75);
+  --warning-foreground: oklch(0.35 0.08 75);
+  --warning-muted: oklch(0.96 0.03 75);
+
+  --error: oklch(0.62 0.18 25);
+  --error-foreground: oklch(0.30 0.08 25);
+  --error-muted: oklch(0.96 0.03 25);
+
+  --info: oklch(0.60 0.15 240);
+  --info-foreground: oklch(0.28 0.08 240);
+  --info-muted: oklch(0.96 0.03 240);
+}
+
+/* Dark mode - deep, high-contrast with subtle cool tint
+   Background hierarchy: 0.07 → 0.10 → 0.14 → 0.17 (clear separation)
+   All neutrals carry 0.005 chroma at hue 260 for depth without obvious color
+   Muted text at 0.72 ensures readability even at 9-11px on card surfaces */
+.dark {
+  --background: oklch(0.065 0.005 260);
+  --foreground: oklch(0.95 0 0);
+
+  --card: oklch(0.12 0.005 260);
+  --card-foreground: oklch(0.95 0 0);
+
+  --popover: oklch(0.14 0.005 260);
+  --popover-foreground: oklch(0.95 0 0);
+
+  /* Primary - crisp white on deep dark */
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.07 0.005 260);
+
+  /* Secondary - cool blue tint for hover states */
+  --secondary: oklch(0.17 0.01 260);
+  --secondary-foreground: oklch(0.90 0.005 260);
+
+  /* Muted - must be clearly readable at small sizes on card bg (0.10)
+     0.72 on 0.10 ≈ 8:1 contrast — comfortable for 9px uppercase labels */
+  --muted: oklch(0.14 0.005 260);
+  --muted-foreground: oklch(0.72 0 0);
+
+  /* Accent - interactive surfaces */
+  --accent: oklch(0.17 0.008 260);
+  --accent-foreground: oklch(0.95 0 0);
+
+  /* Destructive - vivid red */
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.95 0.01 25);
+
+  /* Borders - clearly visible card edges (0.24 on 0.07/0.10 is unambiguous) */
+  --border: oklch(0.24 0.008 260);
+  --input: oklch(0.26 0.008 260);
+  --ring: oklch(0.95 0 0);
+
+  /* Chart colors - vibrant and distinct on deep background */
+  --chart-1: oklch(0.85 0 0);       /* Near-white - primary data */
+  --chart-2: oklch(0.72 0.18 145);  /* Green - success */
+  --chart-3: oklch(0.80 0.16 75);   /* Yellow - warning */
+  --chart-4: oklch(0.72 0.20 25);   /* Orange - error */
+  --chart-5: oklch(0.70 0.18 270);  /* Purple - accent */
+
+  /* Sidebar - darkest surface, clear hierarchy */
+  --sidebar: oklch(0.08 0.005 260);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.95 0 0);
+  --sidebar-primary-foreground: oklch(0.07 0.005 260);
+  --sidebar-accent: oklch(0.17 0.008 260);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.24 0.008 260);
+  --sidebar-ring: oklch(0.95 0 0);
+
+  /* Semantic status colors - high contrast text on muted backgrounds */
+  --success: oklch(0.72 0.18 145);
+  --success-foreground: oklch(0.88 0.08 145);
+  --success-muted: oklch(0.15 0.03 145);
+
+  --warning: oklch(0.80 0.16 75);
+  --warning-foreground: oklch(0.90 0.08 75);
+  --warning-muted: oklch(0.15 0.03 75);
+
+  --error: oklch(0.72 0.20 25);
+  --error-foreground: oklch(0.90 0.08 25);
+  --error-muted: oklch(0.15 0.03 25);
+
+  --info: oklch(0.70 0.16 240);
+  --info-foreground: oklch(0.90 0.06 240);
+  --info-muted: oklch(0.15 0.03 240);
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+@layer base {
+  * {
+    @apply border-border;
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";  /* Stylistic alternates */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
+
+  /* Display typography - for KPIs, hero numbers */
+  .text-display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+
+  /* Headings use display font */
+  h1, h2, .heading {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+  }
+
+  h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Monospace for data */
+  .font-mono, code, pre, .tabular-nums {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum";  /* Tabular numbers */
+  }
+
+  /* Label typography */
+  .text-label {
+    font-size: 0.6875rem;  /* 11px */
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Caption typography */
+  .text-caption {
+    font-size: 0.75rem;  /* 12px */
+    color: var(--muted-foreground);
+    line-height: 1.5;
+  }
+}
+
+/* ============================================
+   COMPONENT UTILITIES
+   ============================================ */
+
+@layer utilities {
+  /* Status indicators - using CSS variables for dark mode support */
+  .status-success {
+    background-color: var(--success-muted);
+    color: var(--success-foreground);
+    border-color: var(--success);
+  }
+
+  .status-warning {
+    background-color: var(--warning-muted);
+    color: var(--warning-foreground);
+    border-color: var(--warning);
+  }
+
+  .status-error {
+    background-color: var(--error-muted);
+    color: var(--error-foreground);
+    border-color: var(--error);
+  }
+
+  .status-info {
+    background-color: var(--info-muted);
+    color: var(--info-foreground);
+    border-color: var(--info);
+  }
+
+  .status-neutral {
+    @apply bg-secondary text-secondary-foreground border-border;
+  }
+
+  /* Metric card backgrounds - subtle tinted backgrounds */
+  .metric-processed {
+    @apply bg-[var(--success-muted)];
+  }
+
+  .metric-deleted {
+    @apply bg-[var(--error-muted)];
+  }
+
+  .metric-factories {
+    background-color: oklch(from var(--background) calc(l + 0.02) 0.01 270);
+  }
+
+  .metric-workers {
+    background-color: oklch(from var(--background) calc(l + 0.02) 0.01 60);
+  }
+
+  /* Interactive states */
+  .interactive-row {
+    @apply transition-all duration-150 ease-out;
+    @apply hover:bg-secondary/50 hover:translate-x-0.5;
+  }
+
+  .interactive-card {
+    @apply transition-all duration-200 ease-out;
+    @apply hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  /* Focus ring */
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@layer utilities {
+  /* Staggered fade-in for page load */
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out backwards;
+  }
+
+  .animate-fade-in-delay-1 { animation-delay: 50ms; }
+  .animate-fade-in-delay-2 { animation-delay: 100ms; }
+  .animate-fade-in-delay-3 { animation-delay: 150ms; }
+  .animate-fade-in-delay-4 { animation-delay: 200ms; }
+  .animate-fade-in-delay-5 { animation-delay: 250ms; }
+
+  /* Slide up fade */
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out backwards;
+  }
+
+  /* Pulse for active states */
+  .animate-pulse-subtle {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@layer utilities {
+  .animate-shimmer {
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+}
+
+/* Device planning map tooltips */
+.device-map-tooltip {
+  background: var(--color-popover, #1a1a1a) !important;
+  color: var(--color-popover-foreground, #f5f5f0) !important;
+  border: 1px solid var(--color-border, #333) !important;
+  border-radius: 4px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+}
+.device-map-tooltip::before {
+  border-top-color: var(--color-border, #333) !important;
+}
+
+/* Range slider track styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--border);
+}
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--border);
+  border: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  margin-top: -7px;
+}
+input[type="range"]:focus {
+  outline: none;
+}
+input[type="range"]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Factory card tooltip — always visible next to pin */
+.fcard-tooltip {
+  background: var(--color-background, #fff) !important;
+  border: 1px solid var(--color-border, #e5e5e5) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08) !important;
+  padding: 0 !important;
+  pointer-events: auto !important;
+}
+.fcard-tooltip::before { display: none !important; }
+.dark .fcard-tooltip {
+  background: var(--color-card, #1a1a1e) !important;
+  border-color: var(--color-border, #333) !important;
+}
+
+.fcard {
+  padding: 8px 10px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  min-width: 130px;
+}
+.fcard:hover { background: var(--color-muted, #f5f5f5); }
+.fcard-head {
+  display: flex; align-items: center; gap: 8px;
+  justify-content: space-between;
+}
+.fcard-name {
+  font-size: 12px; font-weight: 700;
+  color: var(--color-foreground, #111);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fcard-badge {
+  font-size: 8px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 6px; white-space: nowrap; flex-shrink: 0; margin-left: 4px;
+}
+.fcard-sub {
+  font-size: 10px;
+  color: var(--color-muted-foreground, #888);
+  margin-top: 1px;
+}
+.fcard-val {
+  font-size: 14px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground, #111);
+  margin-top: 3px; letter-spacing: -0.02em;
+}
+
+/* Expanded popup — on click, with status selector */
+.fpopup-container .leaflet-popup-content-wrapper {
+  border-radius: 0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12) !important;
+  padding: 0 !important;
+  background: var(--color-background, #fff) !important;
+  border: 1px solid var(--color-border, #e5e5e5) !important;
+}
+.fpopup-container .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+.fpopup-container .leaflet-popup-tip {
+  background: var(--color-background, #fff) !important;
+  border: 1px solid var(--color-border, #e5e5e5) !important;
+  border-top: none !important; border-left: none !important;
+}
+.fpopup-container .leaflet-popup-close-btn {
+  color: var(--color-muted-foreground, #888) !important;
+  font-size: 16px !important; top: 6px !important; right: 8px !important;
+}
+
+.fpopup {
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+}
+.fpopup-name {
+  font-size: 13px; font-weight: 700;
+  color: var(--color-foreground, #111);
+}
+.fpopup-meta {
+  font-size: 11px;
+  color: var(--color-muted-foreground, #888);
+  margin-top: 2px;
+}
+.fpopup-contact {
+  font-size: 10px;
+  color: var(--color-muted-foreground, #888);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border, #e5e5e5);
+}
+.fpopup-statuses {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border, #e5e5e5);
+}
+.fstatus-btn {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 2px;
+  border: 1px solid var(--color-border, #e5e5e5);
+  background: transparent;
+  color: var(--color-muted-foreground, #888);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.fstatus-btn:hover:not(.active) { background: var(--color-muted, #f5f5f5); }
+.fstatus-btn.active { font-weight: 700; cursor: default; }

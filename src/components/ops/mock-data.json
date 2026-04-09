@@ -1,0 +1,63 @@
+{
+  "pins": [
+    { "city": "Delhi", "latitude": 28.6139, "longitude": 77.209, "status": "deployed", "quantity": 14, "pocName": "Rahul Sharma", "pocPhone": "+91 9823145670" },
+    { "city": "Mumbai", "latitude": 19.076, "longitude": 72.8777, "status": "deployed", "quantity": 18, "pocName": "Arjun Patel", "pocPhone": "+91 8856234890" },
+    { "city": "Bengaluru", "latitude": 12.9716, "longitude": 77.5946, "status": "deployed", "quantity": 12, "pocName": "Ankit Reddy", "pocPhone": "+91 7745612390" },
+    { "city": "Chennai", "latitude": 13.0827, "longitude": 80.2707, "status": "idle", "quantity": 5, "pocName": "Priya Kumar", "pocPhone": "+91 9012567834" },
+    { "city": "Hyderabad", "latitude": 17.385, "longitude": 78.4867, "status": "deployed", "quantity": 9, "pocName": "Vikram Rao", "pocPhone": "+91 8890234561" },
+    { "city": "Pune", "latitude": 18.5204, "longitude": 73.8567, "status": "idle", "quantity": 7, "pocName": "Sneha Joshi", "pocPhone": "+91 7734561289" },
+    { "city": "Ahmedabad", "latitude": 23.0225, "longitude": 72.5714, "status": "lead", "quantity": 6, "pocName": "Kiran Modi", "pocPhone": "+91 9567012348" },
+    { "city": "Jaipur", "latitude": 26.9124, "longitude": 75.7873, "status": "idle", "quantity": 4, "pocName": "Deepak Singh", "pocPhone": "+91 8401239567" },
+    { "city": "Lucknow", "latitude": 26.8467, "longitude": 80.9462, "status": "lead", "quantity": 3, "pocName": "Neha Gupta", "pocPhone": "+91 9234578901" },
+    { "city": "Kolkata", "latitude": 22.5726, "longitude": 88.3639, "status": "deployed", "quantity": 8, "pocName": "Sanjay Das", "pocPhone": "+91 7812345690" },
+    { "city": "Coimbatore", "latitude": 11.0168, "longitude": 76.9558, "status": "deployed", "quantity": 6, "pocName": "Ravi Krishnan", "pocPhone": "+91 8678901234" },
+    { "city": "Tirupur", "latitude": 11.1085, "longitude": 77.3411, "status": "lead", "quantity": 5, "pocName": "Murugan S", "pocPhone": "+91 9345678012" },
+    { "city": "Surat", "latitude": 21.1702, "longitude": 72.8311, "status": "deployed", "quantity": 10, "pocName": "Jigar Desai", "pocPhone": "+91 7901234568" },
+    { "city": "Indore", "latitude": 22.7196, "longitude": 75.8577, "status": "idle", "quantity": 3, "pocName": "Amit Tiwari", "pocPhone": "+91 8123456790" }
+  ],
+  "transit": [
+    { "id": "t1", "eta": "Apr 3, 2:30 PM", "route": "Shenzhen → Delhi", "quantity": 25, "type": "Devices", "status": "Customs" },
+    { "id": "t2", "eta": "Apr 5, 10:00 AM", "route": "Delhi → Mumbai", "quantity": 8, "type": "Devices", "status": "Shipped" },
+    { "id": "t3", "eta": "Apr 4, 6:00 PM", "route": "Delhi → Bengaluru", "quantity": 15, "type": "SD Cards", "status": "In Transit" },
+    { "id": "t4", "eta": "Apr 6, 9:00 AM", "route": "Mumbai → Chennai", "quantity": 5, "type": "Chargers", "status": "Packed" },
+    { "id": "t5", "eta": "Apr 8, 12:00 PM", "route": "Shenzhen → Mumbai", "quantity": 30, "type": "Devices", "status": "Mfg" },
+    { "id": "t6", "eta": "Apr 7, 3:00 PM", "route": "Bengaluru → Hyderabad", "quantity": 4, "type": "Devices", "status": "Shipped" }
+  ],
+  "salesPipeline": [
+    { "id": "s1", "factory": "Dukaan Garments", "city": "Bengaluru", "workers": 50, "days": 15, "status": "Closed", "salesRep": "Amit Shah", "estPayout": 3750 },
+    { "id": "s2", "factory": "ABC Textiles", "city": "Delhi", "workers": 120, "days": 10, "status": "In-Talks", "salesRep": "Sara Khan", "estPayout": 6000 },
+    { "id": "s3", "factory": "XYZ Garments", "city": "Mumbai", "workers": 80, "days": 12, "status": "Lead", "salesRep": "Sara Khan", "estPayout": 4800 },
+    { "id": "s4", "factory": "RR Fabrics", "city": "Chennai", "workers": 60, "days": 5, "status": "Rejected", "salesRep": "Vikram Rao", "estPayout": 1500 },
+    { "id": "s5", "factory": "Lakshmi Exports", "city": "Tirupur", "workers": 200, "days": 20, "status": "In-Talks", "salesRep": "Ravi K", "estPayout": 20000 },
+    { "id": "s6", "factory": "Sunrise Knits", "city": "Coimbatore", "workers": 90, "days": 8, "status": "Lead", "salesRep": "Amit Shah", "estPayout": 3600 },
+    { "id": "s7", "factory": "Gujarat Cotton", "city": "Ahmedabad", "workers": 150, "days": 14, "status": "Closed", "salesRep": "Kiran Modi", "estPayout": 10500 },
+    { "id": "s8", "factory": "Indore Spinning", "city": "Indore", "workers": 45, "days": 7, "status": "Lead", "salesRep": "Amit Tiwari", "estPayout": 1575 },
+    { "id": "s9", "factory": "Kolkata Weaves", "city": "Kolkata", "workers": 110, "days": 12, "status": "In-Talks", "salesRep": "Sanjay Das", "estPayout": 6600 },
+    { "id": "s10", "factory": "Surat Silk Mills", "city": "Surat", "workers": 180, "days": 18, "status": "Closed", "salesRep": "Jigar Desai", "estPayout": 16200 }
+  ],
+  "operators": [
+    { "name": "Ravi Kumar", "id": "op-1" },
+    { "name": "Priya Nair", "id": "op-2" },
+    { "name": "Kiran Babu", "id": "op-3" },
+    { "name": "Meena Sharma", "id": "op-4" },
+    { "name": "Suresh Reddy", "id": "op-5" },
+    { "name": "Divya Pillai", "id": "op-6" }
+  ],
+  "sites": [
+    { "name": "Dukaan Garments, Bengaluru", "id": "site-1" },
+    { "name": "ABC Textiles, Delhi", "id": "site-2" },
+    { "name": "Gujarat Cotton, Ahmedabad", "id": "site-3" },
+    { "name": "Surat Silk Mills, Surat", "id": "site-4" },
+    { "name": "Lakshmi Exports, Tirupur", "id": "site-5" },
+    { "name": "Kolkata Weaves, Kolkata", "id": "site-6" }
+  ],
+  "assignments": [
+    { "id": "a1", "operator": "Ravi Kumar", "site": "Dukaan Garments, Bengaluru", "date": "2026-04-02", "time": "8:00 AM", "status": "Confirmed" },
+    { "id": "a2", "operator": "Priya Nair", "site": "ABC Textiles, Delhi", "date": "2026-04-02", "time": "9:00 AM", "status": "Scheduled" },
+    { "id": "a3", "operator": "Kiran Babu", "site": "Gujarat Cotton, Ahmedabad", "date": "2026-04-02", "time": "8:30 AM", "status": "Confirmed" },
+    { "id": "a4", "operator": "Meena Sharma", "site": "Surat Silk Mills, Surat", "date": "2026-04-03", "time": "9:00 AM", "status": "Scheduled" },
+    { "id": "a5", "operator": "Suresh Reddy", "site": "Lakshmi Exports, Tirupur", "date": "2026-04-03", "time": "7:30 AM", "status": "Scheduled" },
+    { "id": "a6", "operator": "Ravi Kumar", "site": "Kolkata Weaves, Kolkata", "date": "2026-04-04", "time": "10:00 AM", "status": "Scheduled" },
+    { "id": "a7", "operator": "Divya Pillai", "site": "Dukaan Garments, Bengaluru", "date": "2026-04-04", "time": "8:00 AM", "status": "Confirmed" }
+  ]
+}
