@@ -53,7 +53,6 @@ import {
   useVerifyOpsLead,
   useRejectOpsLead,
   useAllocateOpsLead,
-  useAssignOpsShipper,
   useDispatchOpsLead,
   useDeliverOpsLead,
   useAssignOpsDeployer,
@@ -88,7 +87,6 @@ export function OpsKanbanPage() {
   const verifyLead = useVerifyOpsLead();
   const rejectLead = useRejectOpsLead();
   const allocateLead = useAllocateOpsLead();
-  const assignShipper = useAssignOpsShipper();
   const dispatchLead = useDispatchOpsLead();
   const deliverLead = useDeliverOpsLead();
   const assignDeployer = useAssignOpsDeployer();
@@ -497,9 +495,6 @@ export function OpsKanbanPage() {
                 const lead = leads.find((l) => l.id === leadId);
                 if (lead) handleStartAllocate(lead);
               }}
-              onAssignShipper={(id, staffId, date) =>
-                assignShipper.mutate({ leadId: id, staff_id: staffId, scheduled_date: date })
-              }
               onMarkDispatched={(id) => dispatchLead.mutate(id)}
               onMarkDelivered={(id) => deliverLead.mutate(id)}
               onOpenShipmentDetails={setShipmentDialogLeadId}

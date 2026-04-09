@@ -44,7 +44,6 @@ interface LeadCardProps {
   onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
-  onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
   onOpenShipmentDetails?: () => void;
@@ -67,14 +66,13 @@ export function LeadCard({
   onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
-  onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
   onOpenShipmentDetails,
   onOpenDeploymentPrep,
   onConfirmDeploy,
 }: LeadCardProps) {
-  const [showForm, setShowForm] = useState<"visit" | "shipper" | null>(null);
+  const [showForm, setShowForm] = useState<"visit" | null>(null);
   const [visitForm, setVisitForm] = useState<VisitFormState | null>(null);
   const [draft, setDraft] = useState({ op: "", date: "", time: "" });
   const todayStr = new Date().toISOString().split("T")[0];
@@ -182,11 +180,6 @@ export function LeadCard({
         <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-muted-foreground">
           {lead.deploymentDeviceCount} devices
           {lead.deploymentRegion ? ` · ${lead.deploymentRegion}` : ""} → {lead.city}
-          {lead.shipper && (
-            <div className="mt-0.5">
-              <span className="font-medium text-foreground">{lead.shipper}</span>
-            </div>
-          )}
           {(lead.shipmentExpectedDelivery || lead.shipmentCarrier || lead.shipmentTracking) && (
             <div className="mt-1 text-[9px] space-y-0.5">
               {lead.shipmentExpectedDelivery && <div>ETA {lead.shipmentExpectedDelivery}</div>}
@@ -312,12 +305,7 @@ export function LeadCard({
             >
               Shipment & logistics details
             </Button>
-            {!lead.shipper && !showForm && (
-              <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => setShowForm("shipper")}>
-                Assign shipper
-              </Button>
-            )}
-            {lead.shipper && !showForm && (
+            {!showForm && (
               <div className="flex gap-1.5">
                 <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkDispatched}>
                   Dispatched
@@ -423,45 +411,6 @@ export function LeadCard({
           </div>
         )}
 
-        {showForm === "shipper" && (
-          <div className="space-y-1.5 pt-1.5 border-t border-border/30 mt-1.5">
-            <select
-              value={draft.op}
-              onChange={(e) => setDraft((d) => ({ ...d, op: e.target.value }))}
-              className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
-            >
-              <option value="">Select staff…</option>
-              {staff.map((op) => (
-                <option key={op.id} value={op.id}>
-                  {op.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={draft.date}
-              min={todayStr}
-              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-              className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
-            />
-            <div className="flex gap-1.5">
-              <Button
-                size="sm"
-                className="flex-1 h-7 text-[11px]"
-                disabled={!draft.op || !draft.date}
-                onClick={() => {
-                  onAssignShipper?.(draft.op, draft.date);
-                  resetForm();
-                }}
-              >
-                Confirm
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={resetForm}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

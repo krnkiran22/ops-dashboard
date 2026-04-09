@@ -44,7 +44,6 @@ interface KanbanBoardProps {
   onAssignVisitSecondary: (leadId: string, staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified: (leadId: string) => void;
   onAllocate: (leadId: string) => void;
-  onAssignShipper: (leadId: string, staffId: string, date: string) => void;
   onMarkDispatched: (leadId: string) => void;
   onMarkDelivered: (leadId: string) => void;
   onOpenShipmentDetails: (leadId: string) => void;
@@ -67,7 +66,6 @@ export function KanbanBoard({
   onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
-  onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
   onOpenShipmentDetails,
@@ -158,7 +156,6 @@ export function KanbanBoard({
                     onAssignVisitSecondary={(sid, d, r) => onAssignVisitSecondary(lead.id, sid, d, r)}
                     onMarkVerified={() => onMarkVerified(lead.id)}
                     onAllocate={() => onAllocate(lead.id)}
-                    onAssignShipper={(sid, d) => onAssignShipper(lead.id, sid, d)}
                     onMarkDispatched={() => onMarkDispatched(lead.id)}
                     onMarkDelivered={() => onMarkDelivered(lead.id)}
                     onOpenShipmentDetails={() => onOpenShipmentDetails(lead.id)}
@@ -200,7 +197,6 @@ export function KanbanBoard({
             onAllocate(detailLead.id);
             setDetailLead(null);
           }}
-          onAssignShipper={(sid, d) => onAssignShipper(detailLead.id, sid, d)}
           onMarkDispatched={() => onMarkDispatched(detailLead.id)}
           onMarkDelivered={() => onMarkDelivered(detailLead.id)}
           onOpenShipmentDetails={() => onOpenShipmentDetails(detailLead.id)}

@@ -16,7 +16,6 @@ interface DraggableLeadCardProps {
   onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
-  onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
   onOpenShipmentDetails?: () => void;
@@ -38,7 +37,6 @@ export function DraggableLeadCard({
   onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
-  onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
   onOpenShipmentDetails,
@@ -77,7 +75,6 @@ export function DraggableLeadCard({
         onAssignVisitSecondary={onAssignVisitSecondary}
         onMarkVerified={onMarkVerified}
         onAllocate={onAllocate}
-        onAssignShipper={onAssignShipper}
         onMarkDispatched={onMarkDispatched}
         onMarkDelivered={onMarkDelivered}
         onOpenShipmentDetails={onOpenShipmentDetails}

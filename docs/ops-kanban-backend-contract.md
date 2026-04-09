@@ -36,7 +36,7 @@ All paths are relative to **`/v1`** (e.g. `GET /v1/ops/leads`). This table is th
 | **POST** | `/ops/leads/{lead_id}/assign-verifier` | Primary site visit assignment |
 | **POST** | `/ops/leads/{lead_id}/verify` | Site verified → pending allocation |
 | **POST** | `/ops/leads/{lead_id}/allocate` | Allocate devices (body: source location, operator org, device count, notes) |
-| **POST** | `/ops/leads/{lead_id}/assign-shipper` | Assign shipper |
+| **POST** | `/ops/leads/{lead_id}/assign-shipper` | Assign shipper *(optional; **admin ops kanban does not call this** — Shipment column uses logistics metadata + Dispatched/Delivered only)* |
 | **POST** | `/ops/leads/{lead_id}/dispatch` | Mark dispatched |
 | **POST** | `/ops/leads/{lead_id}/deliver` | Mark delivered → `pending_deployment` |
 | **POST** | `/ops/leads/{lead_id}/assign-deployer` | Primary deployer schedule (used together with crew metadata) |
@@ -238,7 +238,7 @@ Response normalized to `{ items, total, has_more }`.
 }
 ```
 
-The pipeline pickers (CS, chief, shipper, deploy crew) use **this full list**, not only `ops_operator`.
+The pipeline pickers (CS, chief, deploy crew) use **this full list**, not only `ops_operator`.
 
 (Optional) **GET** `/ops/staff?role=ops_operator` exists in the client but **the current Ops kanban page uses `GET /ops/staff` only**.
 
@@ -322,7 +322,7 @@ All are **POST** ` /ops/leads/{lead_id}/...` unless noted. The client expects a 
 | Assign primary site visitor | `.../assign-verifier` | `{ "staff_id": "uuid", "scheduled_date": "YYYY-MM-DD", "notes": null }` | `LeadAssignment` |
 | Verify site | `.../verify` | _(empty)_ | `Lead` → `pending_allocation`, creates site/factory |
 | Allocate devices | `.../allocate` | `{ "source_location_id": "uuid", "operator_org_id": "uuid", "device_count": 8, "notes": null }` | `Lead` (+ backend sets `metadata.deployment_id`) |
-| Assign shipper | `.../assign-shipper` | `{ "staff_id": "uuid", "scheduled_date": "YYYY-MM-DD", "notes": null }` | `LeadAssignment` |
+| Assign shipper | `.../assign-shipper` | `{ "staff_id": "uuid", "scheduled_date": "YYYY-MM-DD", "notes": null }` | `LeadAssignment` — **not invoked by the admin kanban UI** (Shipment uses **Dispatch** / **Deliver** without a shipper step) |
 | Dispatch | `.../dispatch` | _(empty)_ | `Lead` |
 | Deliver | `.../deliver` | _(empty)_ | `Lead` → `pending_deployment` |
 | Assign deployer | `.../assign-deployer` | `{ "staff_id": "uuid", "scheduled_date": "YYYY-MM-DD", "scheduled_time": "HH:MM", "notes": null }` | `LeadAssignment` |
@@ -370,6 +370,7 @@ Normalized list response — **`items`** is an array of **`OpsLead`** objects (s
 
 The following exist elsewhere in `browser-api.ts` but are **not** required for the current **Ops kanban + map + utilization + checklists** UI:
 
+- `POST /ops/leads/{lead_id}/assign-shipper` (Shipment column uses **Dispatch** / **Deliver** only; no shipper assignment in UI)
 - `GET /ops/shipments` (map transit lines are derived from **leads**, not this endpoint)
 - `GET /ops/sites` for this page
 - Sales-only `confirm` on this page (the kanban wires **accept/reject**; `confirm` is available in the client for other flows)

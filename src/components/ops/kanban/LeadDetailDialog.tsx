@@ -35,7 +35,6 @@ interface Props {
   onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
-  onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
   onOpenShipmentDetails?: () => void;
@@ -57,7 +56,6 @@ export function LeadDetailDialog({
   onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
-  onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
   onOpenShipmentDetails,
@@ -65,7 +63,7 @@ export function LeadDetailDialog({
   onConfirmDeploy,
 }: Props) {
   const [staffDraft, setStaffDraft] = useState({ op: "", date: "", time: "" });
-  const [showAssignForm, setShowAssignForm] = useState<"visit" | "shipper" | null>(null);
+  const [showAssignForm, setShowAssignForm] = useState<"visit" | null>(null);
   const [visitSlot, setVisitSlot] = useState<"primary" | "secondary">("primary");
   const [visitRole, setVisitRole] = useState<VisitRole>("customer_success");
   const [visitAllowedRoles, setVisitAllowedRoles] = useState<VisitRole[]>(["customer_success", "chief_operator"]);
@@ -179,13 +177,6 @@ export function LeadDetailDialog({
           </div>
         )}
 
-        {lead.shipper && (
-          <div className="space-y-1 pt-2 border-t border-border/50">
-            <SectionLabel>Shipper</SectionLabel>
-            <Row label="Assigned" value={lead.shipper} />
-          </div>
-        )}
-
         {(lead.deployer || lead.deploymentCrew.length > 0) && (
           <div className="space-y-1 pt-2 border-t border-border/50">
             <SectionLabel>Deployment</SectionLabel>
@@ -270,12 +261,7 @@ export function LeadDetailDialog({
               <Button size="sm" variant="secondary" className="w-full h-8 text-[11px]" onClick={() => { onOpenShipmentDetails?.(); }}>
                 Shipment & logistics details
               </Button>
-              {!lead.shipper && !showAssignForm && (
-                <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => setShowAssignForm("shipper")}>
-                  Assign shipper
-                </Button>
-              )}
-              {lead.shipper && !showAssignForm && (
+              {!showAssignForm && (
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkDispatched?.(); }}>
                     Dispatched
@@ -371,45 +357,6 @@ export function LeadDetailDialog({
             </div>
           )}
 
-          {showAssignForm === "shipper" && (
-            <div className="space-y-2 pt-2 border-t border-border/50">
-              <SectionLabel>Assign shipper</SectionLabel>
-              <select
-                value={staffDraft.op}
-                onChange={(e) => setStaffDraft((d) => ({ ...d, op: e.target.value }))}
-                className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
-              >
-                <option value="">Select staff…</option>
-                {staff.map((op) => (
-                  <option key={op.id} value={op.id}>{op.name}</option>
-                ))}
-              </select>
-              <input
-                type="date"
-                value={staffDraft.date}
-                min={todayStr}
-                onChange={(e) => setStaffDraft((d) => ({ ...d, date: e.target.value }))}
-                className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  className="flex-1 h-8 text-[11px]"
-                  disabled={!staffDraft.op || !staffDraft.date}
-                  onClick={() => {
-                    onAssignShipper?.(staffDraft.op, staffDraft.date);
-                    resetForm();
-                    onOpenChange(false);
-                  }}
-                >
-                  Confirm
-                </Button>
-                <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={resetForm}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>
