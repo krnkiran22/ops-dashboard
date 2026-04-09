@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveOpsGatewaySegment } from "@/lib/api/ops-gateway";
 
 export const dynamic = "force-dynamic";
 
@@ -7,12 +8,6 @@ function backendBase(): string | null {
     process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() ||
     process.env.BACKEND_PROXY_URL?.trim();
   return b ? b.replace(/\/+$/, "") : null;
-}
-
-function gatewaySegment(): string {
-  const raw = process.env.NEXT_PUBLIC_OPS_API_GATEWAY_VERSION?.trim() ?? "v2";
-  const s = raw.replace(/^\/+|\/+$/g, "");
-  return s.length > 0 ? s : "v2";
 }
 
 function skipAuth(): boolean {
@@ -30,7 +25,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   }
 
   const tail = pathSegments.join("/");
-  const upstream = new URL(`${base}/${gatewaySegment()}/ops/${tail}`);
+  const upstream = new URL(`${base}/${resolveOpsGatewaySegment()}/ops/${tail}`);
   const url = new URL(request.url);
   url.searchParams.forEach((v, k) => {
     upstream.searchParams.set(k, v);

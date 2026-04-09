@@ -1,8 +1,8 @@
 /**
  * Browser-side API client for the ops portal.
  *
- * Gateway segment defaults to `v2` (`/v2/ops/...`). Set
- * `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v1` if the deployment only exposes v1 ops routes.
+ * Gateway segment defaults to **v2** (`/v2/ops/...`). Only set
+ * `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v1` for legacy gateways that do not expose v2.
  *
  * **CORS / ngrok / Vercel:** Browsers block cross-origin calls to tunnels. Set
  * `NEXT_PUBLIC_OPS_SAME_ORIGIN_PROXY=true` so requests go to `/api/ops-proxy/...` on this
@@ -15,6 +15,9 @@
 
 import { getAuthToken, extractApiError } from "@/lib/api/auth";
 import { OpsMockHttpError, resolveMockOpsApi } from "@/lib/api/mock-responses";
+import { resolveOpsGatewaySegment } from "@/lib/api/ops-gateway";
+
+export { DEFAULT_OPS_API_GATEWAY_VERSION, resolveOpsGatewaySegment } from "@/lib/api/ops-gateway";
 
 // ---------------------------------------------------------------------------
 // Error
@@ -101,13 +104,8 @@ export function shouldUseMockOpsApi(): boolean {
   return true;
 }
 
-/**
- * Path segment before `/ops/...` (see `docs/ops-v2-mock-api.md`).
- */
 function opsApiGatewaySegment(): string {
-  const raw = process.env.NEXT_PUBLIC_OPS_API_GATEWAY_VERSION?.trim() ?? "v2";
-  const s = raw.replace(/^\/+|\/+$/g, "");
-  return s.length > 0 ? s : "v2";
+  return resolveOpsGatewaySegment();
 }
 
 /** When true, no `Authorization` header is sent (required for the no-auth mock). */
