@@ -5,32 +5,13 @@
  * (`/v2/ops/...` on e.g. port 8765), set `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v2`,
  * `NEXT_PUBLIC_BACKEND_API_URL`, and `NEXT_PUBLIC_OPS_SKIP_AUTH=true` — see
  * `docs/ops-v2-mock-api.md` and `.env.local.example`.
+ *
+ * Default API base (no env) is the team ngrok tunnel; override with
+ * `NEXT_PUBLIC_BACKEND_API_URL` when the tunnel changes.
  */
 
 import { getAuthToken, extractApiError } from "@/lib/api/auth";
 import { resolveMockOpsApi } from "@/lib/api/mock-responses";
-
-/**
- * When true, API calls return typed mock payloads instead of hitting the network.
- * - Set NEXT_PUBLIC_MOCK_OPS_API=true to force mocks (e.g. CI or demos).
- * - Set NEXT_PUBLIC_MOCK_OPS_API=false to force real API on localhost.
- * - If unset, mocks are used in development on localhost / 127.0.0.1 only.
- */
-function isLikelyLocalDevHostname(hostname: string): boolean {
-  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
-  if (hostname.startsWith("192.168.")) return true;
-  if (hostname.startsWith("10.")) return true;
-  return /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
-}
-
-export function shouldUseMockOpsApi(): boolean {
-  const flag = process.env.NEXT_PUBLIC_MOCK_OPS_API;
-  if (flag === "false" || flag === "0") return false;
-  if (flag === "true" || flag === "1") return true;
-  if (typeof window === "undefined") return false;
-  if (process.env.NODE_ENV !== "development") return false;
-  return isLikelyLocalDevHostname(window.location.hostname.toLowerCase());
-}
 
 // ---------------------------------------------------------------------------
 // Error
@@ -89,9 +70,37 @@ const DEFAULT_LOCAL_API_BASE_URL = "https://localhost.api.build.ai:8000";
 const DEFAULT_STAGING_API_BASE_URL = "https://staging.api.build.ai";
 const DEFAULT_PROD_API_BASE_URL = "https://api.build.ai";
 
+/** Shared ngrok tunnel for ops API (no trailing slash). Update when the tunnel rotates. */
+const DEFAULT_TUNNEL_API_BASE_URL = "https://garnetlike-mara-coadunate.ngrok-free.dev";
+
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_BACKEND_API_URL ||
-  DEFAULT_LOCAL_API_BASE_URL;
+  process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() || DEFAULT_TUNNEL_API_BASE_URL;
+
+function isLikelyLocalDevHostname(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  if (hostname.startsWith("192.168.")) return true;
+  if (hostname.startsWith("10.")) return true;
+  return /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+}
+
+/**
+ * When true, API calls return typed mock payloads instead of hitting the network.
+ * - Set NEXT_PUBLIC_MOCK_OPS_API=true to force mocks (e.g. CI or demos).
+ * - Set NEXT_PUBLIC_MOCK_OPS_API=false to force real API on localhost.
+ * - If unset, mocks are used in development on localhost / 127.0.0.1 only when the
+ *   effective backend is still the local Build AI default (not ngrok / :8765 / etc.).
+ */
+export function shouldUseMockOpsApi(): boolean {
+  const flag = process.env.NEXT_PUBLIC_MOCK_OPS_API;
+  if (flag === "false" || flag === "0") return false;
+  if (flag === "true" || flag === "1") return true;
+  if (typeof window === "undefined") return false;
+  if (process.env.NODE_ENV !== "development") return false;
+  if (!isLikelyLocalDevHostname(window.location.hostname.toLowerCase())) return false;
+  if (process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim()) return false;
+  if (API_BASE_URL !== DEFAULT_LOCAL_API_BASE_URL) return false;
+  return true;
+}
 
 /**
  * Path segment before `/ops/...`: production uses `v1`; the standalone Ops mock
@@ -113,6 +122,23 @@ function joinApiUrl(base: string, segment: string, path: string): string {
   const b = base.replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}/${segment}${p}`;
+}
+
+/** Ngrok free tier interstitial bypass for browser `fetch`. */
+function ngrokBrowserWarningHeaders(requestUrl: string): Record<string, string> {
+  try {
+    const host = new URL(requestUrl).hostname.toLowerCase();
+    if (
+      host.endsWith(".ngrok-free.dev") ||
+      host.endsWith(".ngrok-free.app") ||
+      host.endsWith(".ngrok.io")
+    ) {
+      return { "ngrok-skip-browser-warning": "true" };
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
 }
 
 function resolveOpsApiBaseUrl(configuredApiBaseUrl: string = API_BASE_URL): string {
@@ -199,13 +225,6 @@ export async function apiRequest<T>(
   const effectiveSkipAuth = skipAuth || shouldSkipOpsAuth();
   let token = effectiveSkipAuth ? null : await getAuthToken();
 
-  // --- Headers ---
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(extraHeaders ?? {}),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
   // --- URL ---
   const url = new URL(joinApiUrl(resolveOpsApiBaseUrl(), opsApiGatewaySegment(), path));
   if (params) {
@@ -214,6 +233,14 @@ export async function apiRequest<T>(
         url.searchParams.set(key, String(value));
     }
   }
+
+  // --- Headers (after URL so ngrok bypass applies to final host) ---
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...ngrokBrowserWarningHeaders(url.toString()),
+    ...(extraHeaders ?? {}),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   // --- Fetch ---
   const fetchOptions: RequestInit = {

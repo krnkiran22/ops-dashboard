@@ -22,6 +22,10 @@ To point this app at a **local HTTP mock** on port **8765** with prefix **`/v2/o
 API URL shape: `{NEXT_PUBLIC_BACKEND_API_URL}/{NEXT_PUBLIC_OPS_API_GATEWAY_VERSION}/ops/...`  
 (e.g. `http://localhost:8765/v2/ops/leads`).
 
+### Default API base (ngrok)
+
+If `NEXT_PUBLIC_BACKEND_API_URL` is **not** set, the app calls the shared **ngrok** tunnel defined in `src/lib/api/client.ts` (`DEFAULT_TUNNEL_API_BASE_URL`). Update that constant (or set the env var) when the tunnel rotates. Browser requests add `ngrok-skip-browser-warning: true` automatically for `*.ngrok-free.dev` / `*.ngrok-free.app`.
+
 ## Build
 
 ```bash

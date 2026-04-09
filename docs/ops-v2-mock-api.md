@@ -10,6 +10,12 @@ Serves static fixture data with in-memory mutations — typically no DB, no auth
 
 ---
 
+## Default backend in this repo
+
+**ops-dashboard** defaults to a **ngrok** API base when `NEXT_PUBLIC_BACKEND_API_URL` is unset (see `DEFAULT_TUNNEL_API_BASE_URL` in `src/lib/api/client.ts`). Use `.env.local` to override when the tunnel changes or to point at `:8765` / local Build AI.
+
+---
+
 ## Wiring this repo to the mock
 
 In **ops-dashboard** root, copy `.env.local.example` → `.env.local` and use the **Ops v2 mock** block:
