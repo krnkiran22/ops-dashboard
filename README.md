@@ -5,11 +5,22 @@ Staff-facing ops portal (Next.js): operator tasks, sales map, and admin preview 
 ## Local development
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open [http://localhost:3001](http://localhost:3001) (see `package.json` for the dev port).
+
+### Ops v2 mock API (frontend integration)
+
+To point this app at a **local HTTP mock** on port **8765** with prefix **`/v2/ops`**:
+
+1. Copy `.env.local.example` → `.env.local` and enable the **Ops v2 mock** variable block.
+2. Set `NEXT_PUBLIC_MOCK_OPS_API=false` so requests go over the network (not `mock-responses.ts`).
+3. Start the mock from the Build AI monorepo (`apps/buildai-api`) if available — see **`docs/ops-v2-mock-api.md`** for the full contract, curl examples, and fixture IDs.
+
+API URL shape: `{NEXT_PUBLIC_BACKEND_API_URL}/{NEXT_PUBLIC_OPS_API_GATEWAY_VERSION}/ops/...`  
+(e.g. `http://localhost:8765/v2/ops/leads`).
 
 ## Build
 

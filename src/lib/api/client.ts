@@ -1,8 +1,10 @@
 /**
  * Browser-side API client for the ops portal.
  *
- * Mirrors the dashboard's api-client pattern but without access-boundary
- * or partner-host logic — ops always talks to one backend.
+ * Gateway segment defaults to `v1` (`/v1/ops/...`). For the standalone Ops mock
+ * (`/v2/ops/...` on e.g. port 8765), set `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v2`,
+ * `NEXT_PUBLIC_BACKEND_API_URL`, and `NEXT_PUBLIC_OPS_SKIP_AUTH=true` — see
+ * `docs/ops-v2-mock-api.md` and `.env.local.example`.
  */
 
 import { getAuthToken, extractApiError } from "@/lib/api/auth";
@@ -91,6 +93,28 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_BACKEND_API_URL ||
   DEFAULT_LOCAL_API_BASE_URL;
 
+/**
+ * Path segment before `/ops/...`: production uses `v1`; the standalone Ops mock
+ * server uses `v2` (see `docs/ops-v2-mock-api.md`).
+ */
+function opsApiGatewaySegment(): string {
+  const raw = process.env.NEXT_PUBLIC_OPS_API_GATEWAY_VERSION?.trim() ?? "v1";
+  const s = raw.replace(/^\/+|\/+$/g, "");
+  return s.length > 0 ? s : "v1";
+}
+
+/** When true, no `Authorization` header is sent (required for the no-auth mock). */
+function shouldSkipOpsAuth(): boolean {
+  const v = process.env.NEXT_PUBLIC_OPS_SKIP_AUTH;
+  return v === "true" || v === "1";
+}
+
+function joinApiUrl(base: string, segment: string, path: string): string {
+  const b = base.replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}/${segment}${p}`;
+}
+
 function resolveOpsApiBaseUrl(configuredApiBaseUrl: string = API_BASE_URL): string {
   if (typeof window === "undefined") {
     return configuredApiBaseUrl;
@@ -150,7 +174,7 @@ export async function apiRequest<T>(
   // --- Mock (same response shapes as production; no network) ---
   if (typeof window !== "undefined" && shouldUseMockOpsApi()) {
     try {
-      const urlObj = new URL(`${resolveOpsApiBaseUrl()}/v1${path}`);
+      const urlObj = new URL(joinApiUrl(resolveOpsApiBaseUrl(), opsApiGatewaySegment(), path));
       if (params) {
         for (const [key, value] of Object.entries(params)) {
           if (value != null && value !== "")
@@ -172,7 +196,8 @@ export async function apiRequest<T>(
   }
 
   // --- Auth ---
-  let token = skipAuth ? null : await getAuthToken();
+  const effectiveSkipAuth = skipAuth || shouldSkipOpsAuth();
+  let token = effectiveSkipAuth ? null : await getAuthToken();
 
   // --- Headers ---
   const headers: Record<string, string> = {
@@ -182,7 +207,7 @@ export async function apiRequest<T>(
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   // --- URL ---
-  const url = new URL(`${resolveOpsApiBaseUrl()}/v1${path}`);
+  const url = new URL(joinApiUrl(resolveOpsApiBaseUrl(), opsApiGatewaySegment(), path));
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value != null && value !== "")
@@ -201,7 +226,7 @@ export async function apiRequest<T>(
   let response = await fetch(url.toString(), fetchOptions);
 
   // Retry once if 401 and we had no token yet (Clerk race)
-  if (response.status === 401 && !token && !skipAuth) {
+  if (response.status === 401 && !token && !effectiveSkipAuth) {
     token = await getAuthToken({ retries: 3, retryDelayMs: 100 });
     if (token) {
       response = await fetch(url.toString(), {
