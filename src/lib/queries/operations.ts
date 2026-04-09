@@ -11,9 +11,13 @@ import {
   deliverOpsLead,
   deployOpsLead,
   dispatchOpsLead,
+  fetchOpsCentres,
+  fetchOpsFactories,
   fetchOpsLeadAssignments,
   fetchOpsLeads,
   fetchOpsLocations,
+  fetchOpsShipmentForDeployment,
+  fetchOpsSiteV2Summary,
   fetchOpsStaff,
   fetchOpsStaffByRole,
   fetchOpsTaskChecklists,
@@ -78,10 +82,55 @@ export function useOpsLocations(activeOnly = true) {
   });
 }
 
+export function useOpsFactories(pipelineStatus?: string) {
+  return useQuery({
+    queryKey: operationsKeys.opsFactories(pipelineStatus),
+    queryFn: () => fetchOpsFactories(pipelineStatus),
+    staleTime: 5_000,
+  });
+}
+
+export function useOpsSiteV2Summary(siteId: string | null) {
+  return useQuery({
+    queryKey: operationsKeys.opsSiteV2Summary(siteId ?? ""),
+    queryFn: () => fetchOpsSiteV2Summary(siteId!),
+    enabled: Boolean(siteId),
+    staleTime: 30_000,
+  });
+}
+
+export function useOpsCentres() {
+  return useQuery({
+    queryKey: operationsKeys.opsCentres(),
+    queryFn: () => fetchOpsCentres(),
+    staleTime: 60_000,
+  });
+}
+
+export function useOpsShipmentForDeployment(deploymentId: string | null) {
+  return useQuery({
+    queryKey: operationsKeys.opsShipmentForDeployment(deploymentId ?? ""),
+    queryFn: () => fetchOpsShipmentForDeployment(deploymentId!),
+    enabled: Boolean(deploymentId),
+    staleTime: 15_000,
+  });
+}
+
 function invalidateLeads(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: operationsKeys.opsLeads(), refetchType: "all" });
   qc.invalidateQueries({
     queryKey: [...operationsKeys.all, "ops-lead-assignments"],
+    refetchType: "all",
+  });
+  /** V2 factory-centric data + logistics views stay in sync with lead mutations. */
+  qc.invalidateQueries({ queryKey: [...operationsKeys.all, "ops-factories"], refetchType: "all" });
+  qc.invalidateQueries({ queryKey: [...operationsKeys.all, "ops-centres"], refetchType: "all" });
+  qc.invalidateQueries({
+    queryKey: [...operationsKeys.all, "ops-shipment-for-deployment"],
+    refetchType: "all",
+  });
+  qc.invalidateQueries({
+    queryKey: [...operationsKeys.all, "ops-site-v2-summary"],
     refetchType: "all",
   });
 }

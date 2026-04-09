@@ -1,17 +1,20 @@
 /**
  * Browser-side API client for the ops portal.
  *
- * Gateway segment defaults to `v1` (`/v1/ops/...`). For the standalone Ops mock
- * (`/v2/ops/...` on e.g. port 8765), set `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v2`,
- * `NEXT_PUBLIC_BACKEND_API_URL`, and `NEXT_PUBLIC_OPS_SKIP_AUTH=true` — see
- * `docs/ops-v2-mock-api.md` and `.env.local.example`.
+ * Gateway segment defaults to `v2` (`/v2/ops/...`). Set
+ * `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v1` if the deployment only exposes v1 ops routes.
  *
- * Default API base (no env) is the team ngrok tunnel; override with
- * `NEXT_PUBLIC_BACKEND_API_URL` when the tunnel changes.
+ * **CORS / ngrok / Vercel:** Browsers block cross-origin calls to tunnels. Set
+ * `NEXT_PUBLIC_OPS_SAME_ORIGIN_PROXY=true` so requests go to `/api/ops-proxy/...` on this
+ * origin; the Next.js route forwards to `NEXT_PUBLIC_BACKEND_API_URL` (see
+ * `src/app/api/ops-proxy/[...path]/route.ts`).
+ *
+ * For the Python mock on :8765, use `NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8765`,
+ * `NEXT_PUBLIC_OPS_SKIP_AUTH=true`, and (on Vercel) enable the same-origin proxy.
  */
 
 import { getAuthToken, extractApiError } from "@/lib/api/auth";
-import { resolveMockOpsApi } from "@/lib/api/mock-responses";
+import { OpsMockHttpError, resolveMockOpsApi } from "@/lib/api/mock-responses";
 
 // ---------------------------------------------------------------------------
 // Error
@@ -70,11 +73,8 @@ const DEFAULT_LOCAL_API_BASE_URL = "https://localhost.api.build.ai:8000";
 const DEFAULT_STAGING_API_BASE_URL = "https://staging.api.build.ai";
 const DEFAULT_PROD_API_BASE_URL = "https://api.build.ai";
 
-/** Shared ngrok tunnel for ops API (no trailing slash). Update when the tunnel rotates. */
-const DEFAULT_TUNNEL_API_BASE_URL = "https://garnetlike-mara-coadunate.ngrok-free.dev";
-
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() || DEFAULT_TUNNEL_API_BASE_URL;
+  process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim() || DEFAULT_LOCAL_API_BASE_URL;
 
 function isLikelyLocalDevHostname(hostname: string): boolean {
   if (hostname === "localhost" || hostname === "127.0.0.1") return true;
@@ -98,18 +98,16 @@ export function shouldUseMockOpsApi(): boolean {
   if (process.env.NODE_ENV !== "development") return false;
   if (!isLikelyLocalDevHostname(window.location.hostname.toLowerCase())) return false;
   if (process.env.NEXT_PUBLIC_BACKEND_API_URL?.trim()) return false;
-  if (API_BASE_URL !== DEFAULT_LOCAL_API_BASE_URL) return false;
   return true;
 }
 
 /**
- * Path segment before `/ops/...`: production uses `v1`; the standalone Ops mock
- * server uses `v2` (see `docs/ops-v2-mock-api.md`).
+ * Path segment before `/ops/...` (see `docs/ops-v2-mock-api.md`).
  */
 function opsApiGatewaySegment(): string {
-  const raw = process.env.NEXT_PUBLIC_OPS_API_GATEWAY_VERSION?.trim() ?? "v1";
+  const raw = process.env.NEXT_PUBLIC_OPS_API_GATEWAY_VERSION?.trim() ?? "v2";
   const s = raw.replace(/^\/+|\/+$/g, "");
-  return s.length > 0 ? s : "v1";
+  return s.length > 0 ? s : "v2";
 }
 
 /** When true, no `Authorization` header is sent (required for the no-auth mock). */
@@ -122,6 +120,44 @@ function joinApiUrl(base: string, segment: string, path: string): string {
   const b = base.replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}/${segment}${p}`;
+}
+
+/**
+ * When enabled, the browser calls same-origin `/api/ops-proxy/...` so the Next server
+ * forwards to the real API — avoids CORS on ngrok / remote gateways.
+ */
+function useSameOriginProxy(): boolean {
+  const flag = process.env.NEXT_PUBLIC_OPS_SAME_ORIGIN_PROXY;
+  if (flag === "false" || flag === "0") return false;
+  if (flag === "true" || flag === "1") return true;
+  return false;
+}
+
+function buildOpsRequestUrl(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined | null>
+): URL {
+  const segment = opsApiGatewaySegment();
+  if (typeof window !== "undefined" && useSameOriginProxy()) {
+    const rest = path.replace(/^\/ops\/?/, "").replace(/^\/+/, "");
+    const u = new URL(`${window.location.origin}/api/ops-proxy/${rest}`);
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value != null && value !== "")
+          u.searchParams.set(key, String(value));
+      }
+    }
+    return u;
+  }
+
+  const u = new URL(joinApiUrl(resolveOpsApiBaseUrl(), segment, path));
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value != null && value !== "")
+        u.searchParams.set(key, String(value));
+    }
+  }
+  return u;
 }
 
 /** Ngrok free tier interstitial bypass for browser `fetch`. */
@@ -160,12 +196,12 @@ function resolveOpsApiBaseUrl(configuredApiBaseUrl: string = API_BASE_URL): stri
     return DEFAULT_PROD_API_BASE_URL;
   }
 
-  if (host === "localhost.ops.build.ai" || host === "127.0.0.1" || host === "localhost") {
-    // Respect explicit env override on localhost; otherwise keep local API default.
-    if (configuredApiBaseUrl !== DEFAULT_LOCAL_API_BASE_URL) {
-      return configuredApiBaseUrl;
-    }
-    return DEFAULT_LOCAL_API_BASE_URL;
+  if (
+    host === "localhost.ops.build.ai" ||
+    host === "127.0.0.1" ||
+    host === "localhost"
+  ) {
+    return configuredApiBaseUrl.replace(/\/+$/, "");
   }
 
   return configuredApiBaseUrl;
@@ -216,6 +252,9 @@ export async function apiRequest<T>(
       if (raw) return mockPayload as T;
       return normalizeEnvelopePayload(mockPayload) as T;
     } catch (e) {
+      if (e instanceof OpsMockHttpError) {
+        throw new ApiError(e.message, e.status);
+      }
       const msg = e instanceof Error ? e.message : "Mock API error";
       throw new ApiError(msg, 500);
     }
@@ -225,16 +264,9 @@ export async function apiRequest<T>(
   const effectiveSkipAuth = skipAuth || shouldSkipOpsAuth();
   let token = effectiveSkipAuth ? null : await getAuthToken();
 
-  // --- URL ---
-  const url = new URL(joinApiUrl(resolveOpsApiBaseUrl(), opsApiGatewaySegment(), path));
-  if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value != null && value !== "")
-        url.searchParams.set(key, String(value));
-    }
-  }
+  const url = buildOpsRequestUrl(path, params);
 
-  // --- Headers (after URL so ngrok bypass applies to final host) ---
+  // --- Headers (ngrok bypass only when calling the tunnel URL directly from the browser) ---
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...ngrokBrowserWarningHeaders(url.toString()),
@@ -321,3 +353,54 @@ export const api = {
     return apiRequest<T>(path, { ...opts, method: "DELETE" });
   },
 };
+
+/**
+ * `GET /health` on the API host (not under `/v1/ops` or `/v2/ops`).
+ * Use to verify the Python ops mock (`api.mock_main`) or any gateway that exposes root health.
+ * When {@link shouldUseMockOpsApi} is true, returns a synthetic payload without a network call.
+ */
+export async function fetchOpsServerHealth(): Promise<{
+  status?: string;
+  server?: string;
+}> {
+  if (typeof window === "undefined") {
+    throw new Error("fetchOpsServerHealth is only available in the browser");
+  }
+  if (shouldUseMockOpsApi()) {
+    return { status: "ok", server: "in-app-mock" };
+  }
+  const useProxy =
+    typeof window !== "undefined" && useSameOriginProxy();
+  const url = useProxy
+    ? `${window.location.origin}/api/ops-backend-health`
+    : `${resolveOpsApiBaseUrl().replace(/\/+$/, "")}/health`;
+  const effectiveSkipAuth = shouldSkipOpsAuth();
+  let token = effectiveSkipAuth ? null : await getAuthToken();
+  const headers: Record<string, string> = {
+    ...ngrokBrowserWarningHeaders(url),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response = await fetch(url, { headers });
+  if (response.status === 401 && !token && !effectiveSkipAuth) {
+    token = await getAuthToken({ retries: 3, retryDelayMs: 100 });
+    if (token) {
+      response = await fetch(url, {
+        headers: { ...headers, Authorization: `Bearer ${token}` },
+      });
+    }
+  }
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const msg = extractApiError(errorBody);
+    throw new ApiError(
+      msg !== "Unknown error" ? msg : `Health check failed: ${response.status}`,
+      response.status,
+    );
+  }
+  return (await response.json().catch(() => ({}))) as {
+    status?: string;
+    server?: string;
+  };
+}

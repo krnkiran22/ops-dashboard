@@ -43,6 +43,7 @@ import { ShipmentLogisticsDialog, type ShipmentLogisticsFields } from "./Shipmen
 import { DeploymentPrepDialog, type CrewDraftRow } from "./DeploymentPrepDialog";
 import { UtilizationPanel } from "@/components/ops/inventory/UtilizationPanel";
 import { ChecklistEditor } from "@/components/ops/checklists/ChecklistEditor";
+import { ApiError } from "@/lib/api/client";
 import {
   useOpsLeads,
   useOpsLeadAssignments,
@@ -499,7 +500,20 @@ export function OpsKanbanPage() {
               onMarkDelivered={(id) => deliverLead.mutate(id)}
               onOpenShipmentDetails={setShipmentDialogLeadId}
               onOpenDeploymentPrep={setDeploymentDialogLeadId}
-              onConfirmDeploy={(id) => deployLead.mutate(id)}
+              onConfirmDeploy={(id) =>
+                deployLead.mutate(id, {
+                  onError: (err) => {
+                    const msg =
+                      err instanceof ApiError && err.status === 409
+                        ? err.message ||
+                          "Add a deployment crew with at least one staff member before marking live."
+                        : err instanceof Error
+                          ? err.message
+                          : "Deploy failed";
+                    window.alert(msg);
+                  },
+                })
+              }
             />
           </div>
         </ResizablePanel>

@@ -6,12 +6,17 @@
  * (OpsLead, OpsStaff, OpsLocation, OpsLeadAssignment) to these UI shapes.
  *
  * Status vocabulary (canonical, from ops.lead_statuses):
- *   Triage:   lead, confirmed, accepted, rejected, cancelled, deferred
- *   Pipeline: pending_visit, pending_allocation, pending_shipment,
+ *   Triage:   lead, confirmed, rejected, cancelled, deferred
+ *   Pipeline: accepted, pending_visit, pending_allocation, pending_shipment,
  *             pending_deployment, deployed
  *
- * Kanban columns (five): Sales, Customer Success, Allocation, Shipment,
- * Deployment — `deployed` leads stay in the Deployment column with a badge.
+ * Kanban columns (v2 mock): **Sales** — lead, confirmed, rejected, cancelled, deferred
+ * (rejected/cancelled hidden from board). **Customer Success** — accepted, pending_visit.
+ * **Allocation** — pending_allocation. **Shipment** — pending_shipment.
+ * **Deployment** — pending_deployment, deployed (live badge).
+ *
+ * V2 factory-centric kanban can use `GET /v2/ops/factories?pipeline_status=` per column;
+ * lead-based adapters below remain the default for `OpsKanbanPage`.
  */
 
 import type { OpsLead, OpsStaff, OpsLocation, OpsLeadAssignment } from "@/lib/api/browser-api";

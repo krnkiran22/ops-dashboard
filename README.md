@@ -20,7 +20,8 @@ To point this app at a **local HTTP mock** on port **8765** with prefix **`/v2/o
 3. Start the mock from the Build AI monorepo (`apps/buildai-api`) if available — see **`docs/ops-v2-mock-api.md`** for the full contract, curl examples, and fixture IDs.
 
 API URL shape: `{NEXT_PUBLIC_BACKEND_API_URL}/{NEXT_PUBLIC_OPS_API_GATEWAY_VERSION}/ops/...`  
-(e.g. `http://localhost:8765/v2/ops/leads`).
+The client defaults to gateway **`v2`** (override with `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v1` if needed).  
+Example mock: `http://localhost:8765/v2/ops/leads`.
 
 ### Default API base (ngrok)
 
@@ -35,7 +36,7 @@ npm run build
 ## Deploy on Vercel
 
 1. Import this repo in [Vercel](https://vercel.com) (framework: Next.js is auto-detected).
-2. Add environment variables as needed (e.g. `NEXT_PUBLIC_BACKEND_API_URL`, Clerk keys if used).
+2. Add environment variables as needed (e.g. `NEXT_PUBLIC_BACKEND_API_URL`, `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION` if not using the default `v2`, Clerk keys if used).
 3. `vercel.json` pins install/build commands for reproducible builds.
 
 Static assets live under `public/`.

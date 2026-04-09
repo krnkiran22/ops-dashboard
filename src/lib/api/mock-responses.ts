@@ -16,6 +16,20 @@ import type {
   TaskChecklist,
 } from "@/lib/api/staff";
 
+/**
+ * Thrown from `resolveMockOpsApi` so the browser client can surface HTTP status codes
+ * (e.g. 409) matching the v2 ops mock server.
+ */
+export class OpsMockHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "OpsMockHttpError";
+  }
+}
+
 /** Today's date in local preview — use fixed dates so the "Today" label matches the mock. */
 function mockTodayIsoDate(): string {
   return "2026-04-09";
@@ -291,6 +305,210 @@ const MOCK_LOGISTICS_LOCATIONS = [
     metadata: {} as Record<string, unknown>,
   },
 ];
+
+/** V2 `/v2/ops/factories` — mirrors ops-v2 mock fixture IDs. */
+const MOCK_OPS_FACTORIES = [
+  {
+    site_id: "c1000001-0001-4000-8000-000000000001",
+    factory_name: "Erode Cotton Corp",
+    production_type: "spinning",
+    worker_count: 180,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000003",
+    pipeline_status: "pending_allocation",
+    industry: "Textile",
+    shifts: 2,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000002",
+    factory_name: "Rajkot Ceramics",
+    production_type: "ceramics",
+    worker_count: 95,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000004",
+    pipeline_status: "pending_allocation",
+    industry: "Ceramics",
+    shifts: 2,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000003",
+    factory_name: "Salem Steel Works",
+    production_type: "steel",
+    worker_count: 220,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000005",
+    pipeline_status: "pending_shipment",
+    industry: "Steel",
+    shifts: 3,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000004",
+    factory_name: "Kanpur Leather Co",
+    production_type: "leather",
+    worker_count: 140,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000003",
+    pipeline_status: "pending_shipment",
+    industry: "Leather",
+    shifts: 2,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000005",
+    factory_name: "Madurai Handlooms",
+    production_type: "textile",
+    worker_count: 160,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000005",
+    pipeline_status: "pending_deployment",
+    industry: "Handloom",
+    shifts: 2,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000006",
+    factory_name: "Jaipur Gems & Jewels",
+    production_type: "jewellery",
+    worker_count: 90,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000004",
+    pipeline_status: "pending_deployment",
+    industry: "Jewellery",
+    shifts: 1,
+  },
+  {
+    site_id: "c1000001-0001-4000-8000-000000000007",
+    factory_name: "Chennai Auto Parts",
+    production_type: "automotive",
+    worker_count: 300,
+    team_lead_staff_id: "b0000001-0001-4000-8000-000000000006",
+    team_cs_staff_id: "b0000001-0001-4000-8000-000000000003",
+    pipeline_status: "deployed",
+    industry: "Automotive",
+    shifts: 3,
+  },
+];
+
+const MOCK_OPS_CENTRES = [
+  {
+    id: "e0000001-0001-4000-8000-000000000001",
+    name: "Chennai",
+    location_type: "warehouse",
+    is_active: true,
+    lat: 13.0827,
+    lng: 80.2707,
+    device_count: 42,
+  },
+  {
+    id: "e0000001-0001-4000-8000-000000000002",
+    name: "Mumbai",
+    location_type: "warehouse",
+    is_active: true,
+    lat: 19.076,
+    lng: 72.8777,
+    device_count: 28,
+  },
+  {
+    id: "e0000001-0001-4000-8000-000000000003",
+    name: "Delhi NCR",
+    location_type: "hub",
+    is_active: true,
+    lat: 28.6139,
+    lng: 77.209,
+    device_count: 35,
+  },
+];
+
+const MOCK_SHIPMENTS_BY_DEPLOYMENT: Record<string, Record<string, unknown>> = {
+  "d0000001-0001-4000-8000-000000000001": {
+    id: "ship-1",
+    vendor: "Blue Dart",
+    transport_mode: "surface",
+    poc_staff_id: "b0000001-0001-4000-8000-000000000007",
+    departed_at: "2026-04-08T06:00:00.000Z",
+    eta: "2026-04-12",
+    tracking_reference: "BD-2026-0099",
+    allocation_id: "alloc-mock-1",
+    status: "in_transit",
+  },
+  "d0000001-0001-4000-8000-000000000002": {
+    id: "ship-2",
+    vendor: "Delhivery",
+    transport_mode: "ftl",
+    poc_staff_id: "b0000001-0001-4000-8000-000000000008",
+    departed_at: "2026-04-07T10:00:00.000Z",
+    eta: "2026-04-11",
+    tracking_reference: "DLV-4412098",
+    allocation_id: "alloc-mock-2",
+    status: "dispatched",
+  },
+  "d0000001-0001-4000-8000-000000000003": {
+    id: "ship-3",
+    vendor: "Gati-KWE",
+    transport_mode: "ltl",
+    eta: "2026-04-09",
+    tracking_reference: "GATI-90817264",
+    allocation_id: "alloc-mock-3",
+    status: "delivered",
+  },
+  "d0000001-0001-4000-8000-000000000004": {
+    id: "ship-4",
+    vendor: "Safexpress",
+    transport_mode: "surface",
+    eta: "2026-04-10",
+    tracking_reference: "SFX-BLR-771902",
+    allocation_id: "alloc-mock-4",
+    status: "delivered",
+  },
+  "d0000001-0001-4000-8000-000000000005": {
+    id: "ship-5",
+    vendor: "Mahindra Logistics",
+    transport_mode: "white_glove",
+    eta: "2026-04-01",
+    tracking_reference: "MLL-CH-991200",
+    allocation_id: "alloc-mock-5",
+    status: "delivered",
+  },
+};
+
+const MOCK_SITE_V2_SUMMARY: Record<string, Record<string, unknown>> = {
+  "c1000001-0001-4000-8000-000000000007": {
+    site_id: "c1000001-0001-4000-8000-000000000007",
+    factory_name: "Chennai Auto Parts",
+    pipeline_status: "deployed",
+    worker_count: 300,
+    industry: "Automotive",
+    shifts: 3,
+    team_lead: {
+      id: "b0000001-0001-4000-8000-000000000006",
+      display_name: "Rajesh Iyer",
+    },
+    team_cs: {
+      id: "b0000001-0001-4000-8000-000000000003",
+      display_name: "Meena Rao",
+    },
+    devices_deployed: 16,
+    recent_allocations: [
+      { id: "alloc-1", device_count: 8, source: "Chennai" },
+    ],
+  },
+  "c1000001-0001-4000-8000-000000000001": {
+    site_id: "c1000001-0001-4000-8000-000000000001",
+    factory_name: "Erode Cotton Corp",
+    pipeline_status: "pending_allocation",
+    worker_count: 180,
+    industry: "Textile",
+    shifts: 2,
+    team_lead: {
+      id: "b0000001-0001-4000-8000-000000000006",
+      display_name: "Rajesh Iyer",
+    },
+    team_cs: {
+      id: "b0000001-0001-4000-8000-000000000003",
+      display_name: "Meena Rao",
+    },
+    devices_deployed: 0,
+    recent_allocations: [],
+  },
+};
 
 let mockCrmAssignmentsByLeadId: Record<string, LeadAssignment[]> = {
   "mock-lead-map-1": [
@@ -619,6 +837,37 @@ export function resolveMockOpsApi(ctx: MockResolveContext): unknown {
     return paginate(items);
   }
 
+  if (method === "GET" && p === "/ops/factories") {
+    const ps = searchParams.get("pipeline_status");
+    let items = [...MOCK_OPS_FACTORIES];
+    if (ps) items = items.filter((f) => f.pipeline_status === ps);
+    return paginate(items);
+  }
+
+  if (method === "GET" && p === "/ops/centres") {
+    return paginate([...MOCK_OPS_CENTRES]);
+  }
+
+  const siteV2Summary = p.match(/^\/ops\/sites\/([^/]+)\/v2-summary$/);
+  if (method === "GET" && siteV2Summary) {
+    const id = siteV2Summary[1];
+    const data = MOCK_SITE_V2_SUMMARY[id];
+    if (!data) {
+      throw new OpsMockHttpError("Site summary not found", 404);
+    }
+    return data;
+  }
+
+  const shipmentForDep = p.match(/^\/ops\/shipments\/for-deployment\/([^/]+)$/);
+  if (method === "GET" && shipmentForDep) {
+    const id = shipmentForDep[1];
+    const data = MOCK_SHIPMENTS_BY_DEPLOYMENT[id];
+    if (!data) {
+      throw new OpsMockHttpError("Shipment not found for deployment", 404);
+    }
+    return data;
+  }
+
   if (method === "GET" && p === "/ops/task-checklists") {
     return { items: Object.values(mockTaskChecklists) };
   }
@@ -931,8 +1180,29 @@ export function resolveMockOpsApi(ctx: MockResolveContext): unknown {
 
   const leadDeploy = p.match(/^\/ops\/leads\/([^/]+)\/deploy$/);
   if (method === "POST" && leadDeploy) {
-    const u = patchMockLead(leadDeploy[1], { status: "deployed" });
+    const id = leadDeploy[1];
+    const lead = mockLeads.find((l) => l.id === id);
+    if (!lead) {
+      throw new OpsMockHttpError("Lead not found", 404);
+    }
+    const crew = lead.metadata.deployment_crew;
+    const hasCrew =
+      Array.isArray(crew) &&
+      crew.some(
+        (m) =>
+          m &&
+          typeof m === "object" &&
+          String((m as { staff_id?: unknown }).staff_id ?? "").trim() !== "",
+      );
+    if (!hasCrew) {
+      throw new OpsMockHttpError(
+        "deployment_crew must include at least one staff_id",
+        409,
+      );
+    }
+    const u = patchMockLead(id, { status: "deployed" });
     if (u) return u;
+    throw new OpsMockHttpError("Lead not found", 404);
   }
 
   throw new Error(`No mock for ${method} ${p}`);

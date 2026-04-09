@@ -2,7 +2,7 @@
 
 This document is for **backend engineers** implementing or extending APIs consumed by the **Build AI admin Operations page** (`/ops` in `apps/buildai-dashboard`): the map + five-column lead pipeline (Sales → Customer Success → Allocation → Shipment → Deployment), utilization sidebar, and task checklist settings.
 
-All paths below are under the API gateway **`/v1`** prefix (the dashboard client prepends `/v1` automatically).
+**ops-dashboard** (`NEXT_PUBLIC_OPS_API_GATEWAY_VERSION`, default **`v2`**) and **buildai-dashboard** may use different gateway segments. Paths below are written as `/ops/...`; the full URL is `{api_origin}/{version}/ops/...` (e.g. `/v2/ops/leads`).
 
 ---
 
@@ -24,7 +24,7 @@ TypeScript fetch helpers for **POST pipeline actions** in `browser-api.ts` are w
 
 ## 2. Complete HTTP surface (Ops `/ops` page)
 
-All paths are relative to **`/v1`** (e.g. `GET /v1/ops/leads`). This table is the **full set** of methods and routes the kanban page, map, utilization sidebar, and checklist editor call via `browser-api.ts` + `operations.ts` hooks.
+Paths in the table are under **`/ops`** on the gateway (e.g. `GET …/v2/ops/leads` when using v2). This table is the **full set** of methods and routes the kanban page, map, utilization sidebar, and checklist editor call via `browser-api.ts` + `operations.ts` hooks.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -394,12 +394,12 @@ If you add new UI that needs them, extend this doc.
 
 ## 14. Quick checklist for backend / mock servers
 
-- [ ] `GET /v1/ops/leads` returns list envelope → normalized `items` / `total` / `has_more`
+- [ ] `GET …/ops/leads` returns list envelope → normalized `items` / `total` / `has_more`
 - [ ] Each lead has **`status`** from §3 and **`metadata`** object (may be `{}`)
 - [ ] After allocate, lead has **`metadata.deployment_id`** string
-- [ ] `GET /v1/ops/leads/{id}/assignments` returns verifier/shipper/deployer rows as needed
-- [ ] `GET /v1/ops/staff` returns enough rows for dropdowns
-- [ ] `GET /v1/ops/locations` returns hubs with **`lat`/`lng`**
+- [ ] `GET …/ops/leads/{id}/assignments` returns verifier/shipper/deployer rows as needed
+- [ ] `GET …/ops/staff` returns enough rows for dropdowns
+- [ ] `GET …/ops/locations` returns hubs with **`lat`/`lng`**
 - [ ] POST pipeline endpoints return **`{ "data": ... }`**
 - [ ] **`POST .../deploy`** returns **409** when **`metadata.deployment_crew`** is empty, missing, or has no **`staff_id`**
 - [ ] `PATCH` lead accepts **`metadata`** replacement consistent with merge rules in §5

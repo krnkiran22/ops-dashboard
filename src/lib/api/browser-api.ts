@@ -1,9 +1,17 @@
 /**
  * Ops CRM browser API — subset of the main dashboard `browser-api` used by
  * `OpsKanbanPage` and related components. Built on the shared `api` client.
+ *
+ * Paths are relative to `{base}/{gateway}/ops` (e.g. `/v2/ops/leads` when the gateway
+ * segment is `v2`). The v2 Python mock implements the routes in `docs/ops-v2-mock-api.md`.
+ * V2 additions: `GET /ops/factories`, `GET /ops/sites/{id}/v2-summary`,
+ * `GET /ops/centres`, `GET /ops/shipments/for-deployment/{deployment_id}`.
+ * Legacy helpers (`confirm`, `cancel`, some `sites` list routes) may be absent on the mock.
  */
 
-import { api } from "@/lib/api/client";
+import { api, fetchOpsServerHealth } from "@/lib/api/client";
+
+export { fetchOpsServerHealth };
 
 // =============================================================================
 // Ops: Leads
@@ -215,6 +223,89 @@ export async function fetchOpsLocations(activeOnly = false): Promise<OpsLocation
 }
 
 // =============================================================================
+// Ops: Factories (V2 factory-centric kanban)
+// =============================================================================
+
+export interface OpsFactory {
+  site_id: string;
+  factory_name: string;
+  production_type: string | null;
+  worker_count: number | null;
+  team_lead_staff_id: string | null;
+  team_cs_staff_id: string | null;
+  pipeline_status: string;
+  industry: string | null;
+  shifts: number | null;
+}
+
+export interface OpsFactoriesResponse {
+  items: OpsFactory[];
+  total: number;
+  has_more: boolean;
+}
+
+/** Optional `pipeline_status` loads a single kanban column (matches v2 mock). */
+export async function fetchOpsFactories(
+  pipelineStatus?: string,
+): Promise<OpsFactoriesResponse> {
+  return api.get<OpsFactoriesResponse>("/ops/factories", {
+    ...(pipelineStatus ? { pipeline_status: pipelineStatus } : {}),
+  });
+}
+
+// =============================================================================
+// Ops: Site v2 summary (enriched factory card / operator views)
+// =============================================================================
+
+export interface OpsStaffMini {
+  id: string;
+  display_name: string;
+}
+
+export interface OpsFactorySiteSummary {
+  site_id: string;
+  factory_name: string;
+  pipeline_status: string;
+  worker_count: number | null;
+  industry: string | null;
+  shifts: number | null;
+  team_lead?: OpsStaffMini | null;
+  team_cs?: OpsStaffMini | null;
+  devices_deployed?: number | null;
+  recent_allocations?: unknown[];
+}
+
+export async function fetchOpsSiteV2Summary(
+  siteId: string,
+): Promise<OpsFactorySiteSummary> {
+  return api.get<OpsFactorySiteSummary>(`/ops/sites/${siteId}/v2-summary`);
+}
+
+// =============================================================================
+// Ops: Centres (warehouses / hubs + device_count for logistics map)
+// =============================================================================
+
+export interface OpsCentre {
+  id: string;
+  name: string;
+  location_type: string;
+  is_active: boolean;
+  lat: number | null;
+  lng: number | null;
+  device_count: number;
+}
+
+export interface OpsCentresResponse {
+  items: OpsCentre[];
+  total: number;
+  has_more: boolean;
+}
+
+export async function fetchOpsCentres(): Promise<OpsCentresResponse> {
+  return api.get<OpsCentresResponse>("/ops/centres");
+}
+
+// =============================================================================
 // Ops: Shipments
 // =============================================================================
 
@@ -240,6 +331,28 @@ export async function fetchOpsShipments(status?: string): Promise<OpsShipmentsRe
   return api.get<OpsShipmentsResponse>("/ops/shipments", {
     ...(status ? { status } : {}),
   });
+}
+
+/** V2: shipment row for a deployment (carrier, ETA, tracking). */
+export interface OpsShipmentForDeployment {
+  id?: string;
+  vendor?: string | null;
+  transport_mode?: string | null;
+  poc_staff_id?: string | null;
+  departed_at?: string | null;
+  eta?: string | null;
+  tracking_reference?: string | null;
+  allocation_id?: string | null;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function fetchOpsShipmentForDeployment(
+  deploymentId: string,
+): Promise<OpsShipmentForDeployment> {
+  return api.get<OpsShipmentForDeployment>(
+    `/ops/shipments/for-deployment/${deploymentId}`,
+  );
 }
 
 // =============================================================================
