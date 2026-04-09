@@ -6,8 +6,6 @@ import type { LeadStage } from "./ops-kanban-data";
 interface KanbanColumnProps {
   stage: LeadStage;
   label: string;
-  /** Optional subtitle under the column title. */
-  description?: string;
   accent: string;
   count: number;
   isLoading?: boolean;
@@ -21,7 +19,6 @@ interface KanbanColumnProps {
 export function KanbanColumn({
   stage,
   label,
-  description,
   accent,
   count,
   isLoading,
@@ -45,9 +42,6 @@ export function KanbanColumn({
               {count}
             </span>
           </div>
-          {description ? (
-            <p className="text-[9px] text-muted-foreground leading-snug mt-1 pr-1">{description}</p>
-          ) : null}
         </div>
       </div>
 
@@ -60,7 +54,7 @@ export function KanbanColumn({
         {children}
         {count === 0 && (
           <div className="flex items-center justify-center h-24 text-[11px] text-muted-foreground border border-dashed border-border/50">
-            {isLoading ? "Loading…" : isOver ? "Drop here" : "No sites in this stage"}
+            {isLoading ? "Loading…" : isOver ? "Drop here" : "No leads in this stage"}
           </div>
         )}
       </div>

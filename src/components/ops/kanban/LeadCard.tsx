@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { Lead, Operator } from "./ops-kanban-data";
+import type { Lead, Operator, VisitRole } from "./ops-kanban-data";
+import {
+  visitHasSiteVisitor,
+  visitCanAddSecondary,
+  visitRolesStillNeeded,
+  canConfirmDeploymentComplete,
+} from "./ops-kanban-data";
 
 const TRIAGE_BADGE_STYLE: Record<string, string> = {
   New: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
@@ -17,50 +23,86 @@ function stop(e: React.MouseEvent) {
   e.stopPropagation();
 }
 
+interface VisitFormState {
+  slot: "primary" | "secondary";
+  role: VisitRole;
+  /** Roles the user may pick in the dropdown (second visitor excludes roles already covered). */
+  allowedRoles: VisitRole[];
+}
+
 interface LeadCardProps {
   lead: Lead;
   selected?: boolean;
   onSelect?: () => void;
   isDragging?: boolean;
-  operators?: Operator[];
+  staff?: Operator[];
   onAccept?: () => void;
   onReject?: () => void;
-  onAssignVerifier?: (staffId: string, date: string) => void;
+  /** First site visitor — creates verifier assignment + metadata role. */
+  onAssignVisitPrimary?: (staffId: string, date: string, role: VisitRole) => void;
+  /** Second visitor — metadata only. */
+  onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
   onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
-  onAssignDeployer?: (staffId: string, date: string, time: string) => void;
+  onOpenShipmentDetails?: () => void;
+  onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
 }
 
 /**
- * Pipeline card — shows lead summary, stage context, and inline action
- * buttons. Full details available in LeadDetailDialog on click.
+ * Pipeline card — five-column flow (Sales → CS → Allocation → Shipment → Deployment).
  */
 export function LeadCard({
   lead,
   selected,
   onSelect,
   isDragging,
-  operators = [],
+  staff = [],
   onAccept,
   onReject,
-  onAssignVerifier,
+  onAssignVisitPrimary,
+  onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
   onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
-  onAssignDeployer,
+  onOpenShipmentDetails,
+  onOpenDeploymentPrep,
   onConfirmDeploy,
 }: LeadCardProps) {
-  const [showForm, setShowForm] = useState<"verifier" | "shipper" | "deployer" | null>(null);
+  const [showForm, setShowForm] = useState<"visit" | "shipper" | null>(null);
+  const [visitForm, setVisitForm] = useState<VisitFormState | null>(null);
   const [draft, setDraft] = useState({ op: "", date: "", time: "" });
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const resetForm = () => { setDraft({ op: "", date: "", time: "" }); setShowForm(null); };
+  const resetForm = () => {
+    setDraft({ op: "", date: "", time: "" });
+    setShowForm(null);
+    setVisitForm(null);
+  };
+
+  const openVisitForm = (slot: "primary" | "secondary") => {
+    const needed = visitRolesStillNeeded(lead);
+    const allowedRoles: VisitRole[] =
+      slot === "primary" && !visitHasSiteVisitor(lead)
+        ? ["customer_success", "chief_operator"]
+        : needed;
+    if (allowedRoles.length === 0) return;
+    const role = allowedRoles.includes("customer_success") ? "customer_success" : allowedRoles[0];
+    setVisitForm({ slot, role, allowedRoles });
+    setShowForm("visit");
+    setDraft((d) => ({ ...d, op: "", date: "" }));
+  };
+
+  const canPrimaryVisit = !lead.verifierStaffId;
+  const canSecondaryVisit = visitCanAddSecondary(lead);
+  const stillNeeded = visitRolesStillNeeded(lead);
+  const showAddFirstVisitor = canPrimaryVisit;
+  const showAddSecondVisitor = canSecondaryVisit && stillNeeded.length > 0;
 
   return (
     <div
@@ -73,20 +115,32 @@ export function LeadCard({
       }`}
       onClick={onSelect}
     >
-      {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-0.5">
         <div className="text-[12px] font-medium leading-tight truncate">
           {lead.site}
         </div>
-        {lead.triageBadge && (
-          <span
-            className={`shrink-0 inline-block px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-              TRIAGE_BADGE_STYLE[lead.triageBadge] ?? "bg-muted text-muted-foreground"
-            }`}
-          >
-            {lead.triageBadge}
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-0.5 shrink-0">
+          {lead.stage === "Deployment" && (
+            <span
+              className={`inline-block px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
+                lead.status === "deployed"
+                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                  : "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+              }`}
+            >
+              {lead.status === "deployed" ? "Live" : "Pending deploy"}
+            </span>
+          )}
+          {lead.triageBadge && (
+            <span
+              className={`inline-block px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                TRIAGE_BADGE_STYLE[lead.triageBadge] ?? "bg-muted text-muted-foreground"
+              }`}
+            >
+              {lead.triageBadge}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="text-[11px] text-muted-foreground leading-snug">
@@ -96,20 +150,35 @@ export function LeadCard({
         {lead.rep}
       </div>
 
-      {/* Stage-specific context — CS: verify claimed headcount vs. real deployment potential */}
-      {lead.stage === "Pending Visit" && lead.status === "accepted" && !lead.verifier && (
-        <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[9px] text-muted-foreground leading-snug">
-          Assign an operator to visit the factory and validate workforce / deployment potential.
-        </div>
-      )}
-      {lead.stage === "Pending Visit" && lead.verifier && (
-        <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-muted-foreground">
-          <span className="font-medium text-foreground">{lead.verifier}</span>
-          {lead.visitDate && <> · {lead.visitDate}</>}
+      {lead.stage === "Customer Success" && visitHasSiteVisitor(lead) && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-muted-foreground space-y-0.5">
+          {lead.verifierStaffId && (
+            <div>
+              <span className="text-muted-foreground/80">
+                {lead.visitVerifierRole === "customer_success"
+                  ? "CS"
+                  : lead.visitVerifierRole === "chief_operator"
+                    ? "Chief"
+                    : "Visit"}
+                :{" "}
+              </span>
+              <span className="font-medium text-foreground">{lead.verifier}</span>
+              {lead.visitDate && <> · {lead.visitDate}</>}
+            </div>
+          )}
+          {lead.visitSecondaryStaffId && (
+            <div>
+              <span className="text-muted-foreground/80">
+                {lead.visitSecondaryRole === "customer_success" ? "CS" : "Chief"}:{" "}
+              </span>
+              <span className="font-medium text-foreground">{lead.visitSecondaryName}</span>
+              {lead.visitSecondaryDate && <> · {lead.visitSecondaryDate}</>}
+            </div>
+          )}
         </div>
       )}
 
-      {lead.stage === "Pending Shipment" && (
+      {lead.stage === "Shipment" && lead.status === "pending_shipment" && (
         <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-muted-foreground">
           {lead.deploymentDeviceCount} devices
           {lead.deploymentRegion ? ` · ${lead.deploymentRegion}` : ""} → {lead.city}
@@ -118,13 +187,30 @@ export function LeadCard({
               <span className="font-medium text-foreground">{lead.shipper}</span>
             </div>
           )}
+          {(lead.shipmentExpectedDelivery || lead.shipmentCarrier || lead.shipmentTracking) && (
+            <div className="mt-1 text-[9px] space-y-0.5">
+              {lead.shipmentExpectedDelivery && <div>ETA {lead.shipmentExpectedDelivery}</div>}
+              {lead.shipmentCarrier && <div>{lead.shipmentCarrier}</div>}
+              {lead.shipmentTracking && <div className="truncate">Ref {lead.shipmentTracking}</div>}
+            </div>
+          )}
         </div>
       )}
 
-      {lead.stage === "Pending Deployment" && (
+      {lead.stage === "Deployment" && lead.status === "pending_deployment" && (
         <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-muted-foreground">
           {lead.deploymentDeviceCount} devices → {lead.city}
-          {lead.deployer && (
+          {lead.deploymentCrew.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {lead.deploymentCrew.map((c) => (
+                <div key={`${c.staffId}-${c.role}`}>
+                  <span className="text-muted-foreground/80">{c.role === "chief_operator" ? "Chief" : "Op"}: </span>
+                  <span className="font-medium text-foreground">{c.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {lead.deployer && lead.deploymentCrew.length === 0 && (
             <div className="mt-0.5">
               <span className="font-medium text-foreground">{lead.deployer}</span>
               {lead.deployDate && <> · {lead.deployDate}</>}
@@ -134,56 +220,22 @@ export function LeadCard({
         </div>
       )}
 
-      {/* ── Inline actions ── */}
-      <div className="mt-2" onClick={stop}>
-        {/* Leads: accept/reject */}
-        {lead.stage === "Leads" && (lead.status === "lead" || lead.status === "confirmed") && (
+      {lead.stage === "Deployment" && lead.status === "deployed" && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+          Recording live at factory
+        </div>
+      )}
+
+      <div className="mt-2 space-y-1.5" onClick={stop}>
+        {lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
           <div className="flex gap-1.5">
             <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onAccept}>
               Accept
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-destructive" onClick={() => {
-              if (window.confirm(`Reject "${lead.site}"?`)) onReject?.();
-            }}>
-              Reject
-            </Button>
-          </div>
-        )}
-
-        {/* Pending Visit (CS): verify on-site potential */}
-        {lead.stage === "Pending Visit" && lead.verifier && !showForm && (
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkVerified}>
-              Mark verified
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-destructive" onClick={() => {
-              if (window.confirm(`Reject "${lead.site}"?`)) onReject?.();
-            }}>
-              Reject
-            </Button>
-          </div>
-        )}
-
-        {/* Pending Visit (CS): assign operator for site check */}
-        {lead.stage === "Pending Visit" && !lead.verifier && !showForm && (
-          <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => setShowForm("verifier")}>
-            Assign CS operator
-          </Button>
-        )}
-
-        {/* Pending Allocation: map-based allocation + reject */}
-        {lead.stage === "Pending Allocation" && !showForm && (
-          <div className="space-y-1.5">
-            <p className="text-[9px] text-muted-foreground leading-snug">
-              Opens allocation on the map — pick a hub, then confirm device count.
-            </p>
-            <Button size="sm" className="w-full h-7 text-[11px]" onClick={onAllocate}>
-              Allocate devices…
-            </Button>
             <Button
               size="sm"
               variant="ghost"
-              className="w-full h-7 text-[11px] text-destructive hover:text-destructive"
+              className="h-7 text-[11px] text-destructive"
               onClick={() => {
                 if (window.confirm(`Reject "${lead.site}"?`)) onReject?.();
               }}
@@ -193,48 +245,152 @@ export function LeadCard({
           </div>
         )}
 
-        {/* Pending Shipment */}
-        {lead.stage === "Pending Shipment" && !lead.shipper && !showForm && (
-          <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => setShowForm("shipper")}>
-            Assign Shipper
-          </Button>
-        )}
-        {lead.stage === "Pending Shipment" && lead.shipper && (
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkDispatched}>
-              Dispatched
-            </Button>
-            <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkDelivered}>
-              Delivered
-            </Button>
-          </div>
+        {lead.stage === "Customer Success" && !showForm && (
+          <>
+            {!visitHasSiteVisitor(lead) && showAddFirstVisitor && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  Schedule site visit
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[10px] px-2 w-full"
+                  onClick={() => openVisitForm("primary")}
+                >
+                  Add site visitor
+                </Button>
+              </div>
+            )}
+            {visitHasSiteVisitor(lead) && (
+              <>
+                {showAddSecondVisitor && (
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] px-2"
+                      onClick={() => openVisitForm("secondary")}
+                    >
+                      Add second visitor
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkVerified}>
+                    Mark verified
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-[11px] text-destructive"
+                    onClick={() => {
+                      if (window.confirm(`Reject "${lead.site}"?`)) onReject?.();
+                    }}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {/* Pending Deployment */}
-        {lead.stage === "Pending Deployment" && !lead.deployer && !showForm && (
-          <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => setShowForm("deployer")}>
-            Assign deployment ops
-          </Button>
-        )}
-        {lead.stage === "Pending Deployment" && lead.deployer && (
-          <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => {
-            if (window.confirm(`Confirm deployment for "${lead.site}"?`)) onConfirmDeploy?.();
-          }}>
-            Confirm Deploy
+        {lead.stage === "Allocation" && (
+          <Button size="sm" className="w-full h-7 text-[11px]" onClick={onAllocate}>
+            Allocate devices
           </Button>
         )}
 
-        {/* Inline assignment form */}
-        {showForm && (
+        {lead.stage === "Shipment" && lead.status === "pending_shipment" && (
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="w-full h-7 text-[11px]"
+              onClick={onOpenShipmentDetails}
+            >
+              Shipment & logistics details
+            </Button>
+            {!lead.shipper && !showForm && (
+              <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => setShowForm("shipper")}>
+                Assign shipper
+              </Button>
+            )}
+            {lead.shipper && !showForm && (
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkDispatched}>
+                  Dispatched
+                </Button>
+                <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onMarkDelivered}>
+                  Delivered
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {lead.stage === "Deployment" && lead.status === "pending_deployment" && (
+          <>
+            <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={onOpenDeploymentPrep}>
+              Plan deployment crew
+            </Button>
+            <Button
+              size="sm"
+              className="w-full h-7 text-[11px]"
+              disabled={!canConfirmDeploymentComplete(lead)}
+              title={
+                canConfirmDeploymentComplete(lead)
+                  ? undefined
+                  : "Plan deployment crew before marking deployed"
+              }
+              onClick={() => {
+                if (window.confirm(`Confirm deployment complete for "${lead.site}"?`)) onConfirmDeploy?.();
+              }}
+            >
+              Confirm deployed
+            </Button>
+          </>
+        )}
+
+        {showForm === "visit" && visitForm && (
           <div className="space-y-1.5 pt-1.5 border-t border-border/30 mt-1.5">
+            <div className="text-[10px] font-semibold text-muted-foreground">
+              {visitForm.slot === "primary" ? "Primary visit" : "Additional visitor"}
+            </div>
+            <label className="block text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
+              Role
+            </label>
+            <select
+              value={visitForm.role}
+              onChange={(e) =>
+                setVisitForm((vf) =>
+                  vf && vf.allowedRoles.includes(e.target.value as VisitRole)
+                    ? { ...vf, role: e.target.value as VisitRole }
+                    : vf,
+                )
+              }
+              className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
+            >
+              {visitForm.allowedRoles.map((r) => (
+                <option key={r} value={r}>
+                  {r === "customer_success" ? "Customer Success" : "Chief operator"}
+                </option>
+              ))}
+            </select>
+            <label className="block text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
+              Staff
+            </label>
             <select
               value={draft.op}
               onChange={(e) => setDraft((d) => ({ ...d, op: e.target.value }))}
               className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
             >
-              <option value="">Select ops operator…</option>
-              {operators.map((op) => (
-                <option key={op.id} value={op.id}>{op.name}</option>
+              <option value="">Select staff…</option>
+              {staff.map((op) => (
+                <option key={op.id} value={op.id}>
+                  {op.name}
+                </option>
               ))}
             </select>
             <input
@@ -244,23 +400,57 @@ export function LeadCard({
               onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
               className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
             />
-            {showForm === "deployer" && (
-              <input
-                type="time"
-                value={draft.time}
-                onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
-                className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
-              />
-            )}
             <div className="flex gap-1.5">
               <Button
                 size="sm"
                 className="flex-1 h-7 text-[11px]"
-                disabled={!draft.op || !draft.date || (showForm === "deployer" && !draft.time)}
+                disabled={!draft.op || !draft.date}
                 onClick={() => {
-                  if (showForm === "verifier") onAssignVerifier?.(draft.op, draft.date);
-                  else if (showForm === "shipper") onAssignShipper?.(draft.op, draft.date);
-                  else onAssignDeployer?.(draft.op, draft.date, draft.time);
+                  if (visitForm.slot === "primary") {
+                    onAssignVisitPrimary?.(draft.op, draft.date, visitForm.role);
+                  } else {
+                    onAssignVisitSecondary?.(draft.op, draft.date, visitForm.role);
+                  }
+                  resetForm();
+                }}
+              >
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={resetForm}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {showForm === "shipper" && (
+          <div className="space-y-1.5 pt-1.5 border-t border-border/30 mt-1.5">
+            <select
+              value={draft.op}
+              onChange={(e) => setDraft((d) => ({ ...d, op: e.target.value }))}
+              className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
+            >
+              <option value="">Select staff…</option>
+              {staff.map((op) => (
+                <option key={op.id} value={op.id}>
+                  {op.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={draft.date}
+              min={todayStr}
+              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+              className="w-full h-7 text-[11px] border border-input bg-transparent px-2 outline-none"
+            />
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                className="flex-1 h-7 text-[11px]"
+                disabled={!draft.op || !draft.date}
+                onClick={() => {
+                  onAssignShipper?.(draft.op, draft.date);
                   resetForm();
                 }}
               >

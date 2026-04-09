@@ -239,11 +239,19 @@ let mockTaskChecklists: Record<string, TaskChecklist> = {
 const MOCK_STAFF_ROSTER = [
   {
     id: MOCK_STAFF_ID,
-    display_name: "Mock Operator",
+    display_name: "Kaushal (chief operator)",
     phone: null as string | null,
     email: null as string | null,
     status: "active",
     role: "ops_operator",
+  },
+  {
+    id: "mock-cs-1",
+    display_name: "Nikhil (CS)",
+    phone: null as string | null,
+    email: null as string | null,
+    status: "active",
+    role: "ops_sales",
   },
   {
     id: "mock-sales-1",
@@ -529,7 +537,21 @@ function paginate<T>(items: T[]) {
 function patchMockLead(id: string, patch: Partial<Lead>): Lead | undefined {
   const idx = mockLeads.findIndex((l) => l.id === id);
   if (idx < 0) return undefined;
-  const next = { ...mockLeads[idx], ...patch, updated_at: new Date().toISOString() } as Lead;
+  const prev = mockLeads[idx];
+  const metaPatch = patch.metadata;
+  const mergedMeta =
+    metaPatch && typeof metaPatch === "object" && !Array.isArray(metaPatch)
+      ? { ...prev.metadata, ...metaPatch }
+      : patch.metadata !== undefined
+        ? patch.metadata
+        : prev.metadata;
+  const { metadata: _m, ...rest } = patch;
+  const next = {
+    ...prev,
+    ...rest,
+    metadata: mergedMeta as Record<string, unknown>,
+    updated_at: new Date().toISOString(),
+  } as Lead;
   mockLeads = mockLeads.map((l, i) => (i === idx ? next : l));
   return next;
 }
@@ -671,9 +693,16 @@ export function resolveMockOpsApi(ctx: MockResolveContext): unknown {
     const patch = body as Record<string, unknown>;
     const lead = mockLeads.find((l) => l.id === id);
     if (lead) {
+      const metaIn = patch.metadata;
+      const mergedMeta =
+        metaIn && typeof metaIn === "object" && !Array.isArray(metaIn)
+          ? { ...lead.metadata, ...(metaIn as Record<string, unknown>) }
+          : lead.metadata;
+      const { metadata: _drop, ...restPatch } = patch;
       const updated = {
         ...lead,
-        ...patch,
+        ...restPatch,
+        metadata: mergedMeta,
         ...(typeof patch.status === "string" ? { status: patch.status } : {}),
         updated_at: new Date().toISOString(),
       } as Lead;
@@ -815,10 +844,14 @@ export function resolveMockOpsApi(ctx: MockResolveContext): unknown {
   if (method === "POST" && leadAllocate) {
     const leadId = leadAllocate[1];
     const b = body as { device_count: number };
+    const lead = mockLeads.find((l) => l.id === leadId);
     const u = patchMockLead(leadId, {
       status: "pending_shipment",
       device_count: b.device_count,
-      metadata: { deployment_id: `dep-${leadId}` },
+      metadata: {
+        ...(lead?.metadata ?? {}),
+        deployment_id: `dep-${leadId}`,
+      },
     });
     if (u) return u;
   }
@@ -855,8 +888,16 @@ export function resolveMockOpsApi(ctx: MockResolveContext): unknown {
 
   const leadDeliver = p.match(/^\/ops\/leads\/([^/]+)\/deliver$/);
   if (method === "POST" && leadDeliver) {
-    const u = patchMockLead(leadDeliver[1], { status: "pending_deployment" });
-    if (u) return u;
+    const id = leadDeliver[1];
+    const lead = mockLeads.find((l) => l.id === id);
+    if (lead) {
+      const mergedMeta = {
+        ...lead.metadata,
+        field_ops_ready: false,
+      };
+      const u = patchMockLead(id, { status: "pending_deployment", metadata: mergedMeta });
+      if (u) return u;
+    }
   }
 
   const assignDeployer = p.match(/^\/ops\/leads\/([^/]+)\/assign-deployer$/);

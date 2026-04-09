@@ -19,22 +19,34 @@ import type { DeploymentPin } from "@/components/ops/devices/DeviceDeploymentMap
 import type { TransitRow } from "@/components/ops/shipments/InTransitTable";
 import {
   type Lead,
-  type LeadStage,
   CITY_COORDS,
   adaptLead,
   adaptStaff,
   adaptLocation,
   TERMINAL_STATUSES,
-  STAGE_DISPLAY_LABEL,
+  mapVisualStatusForLead,
+  maxMapVisualStatus,
+  mergeOpsLeadMetadata,
+  META_VISIT_VERIFIER_ROLE,
+  META_VISIT_SECONDARY_STAFF_ID,
+  META_VISIT_SECONDARY_SCHEDULED_DATE,
+  META_VISIT_SECONDARY_ROLE,
+  META_SHIPMENT_EXPECTED_DELIVERY,
+  META_SHIPMENT_CARRIER,
+  META_SHIPMENT_TRACKING,
+  META_SHIPMENT_LOGISTICS_NOTES,
+  META_DEPLOYMENT_CREW,
+  type VisitRole,
 } from "./ops-kanban-data";
 import { KanbanBoard } from "./KanbanBoard";
+import { ShipmentLogisticsDialog, type ShipmentLogisticsFields } from "./ShipmentLogisticsDialog";
+import { DeploymentPrepDialog, type CrewDraftRow } from "./DeploymentPrepDialog";
 import { UtilizationPanel } from "@/components/ops/inventory/UtilizationPanel";
 import { ChecklistEditor } from "@/components/ops/checklists/ChecklistEditor";
 import {
   useOpsLeads,
   useOpsLeadAssignments,
   useOpsStaff,
-  useOpsOperators,
   useOpsLocations,
   useAcceptOpsLead,
   useAssignOpsVerifier,
@@ -46,6 +58,7 @@ import {
   useDeliverOpsLead,
   useAssignOpsDeployer,
   useDeployOpsLead,
+  useUpdateOpsLead,
 } from "@/lib/queries/operations";
 
 const DeviceDeploymentMap = dynamic(
@@ -63,19 +76,10 @@ const DeviceDeploymentMap = dynamic(
   },
 );
 
-const STAGE_TO_MAP_STATUS: Record<LeadStage, string> = {
-  Leads: "new",
-  "Pending Visit": "new",
-  "Pending Allocation": "allocating",
-  "Pending Shipment": "shipping",
-  "Pending Deployment": "deploying",
-};
-
 export function OpsKanbanPage() {
   // ── API data ──
   const leadsQuery = useOpsLeads();
   const staffQuery = useOpsStaff();
-  const operatorsQuery = useOpsOperators();
   const locationsQuery = useOpsLocations();
 
   // ── Mutations ──
@@ -89,6 +93,7 @@ export function OpsKanbanPage() {
   const deliverLead = useDeliverOpsLead();
   const assignDeployer = useAssignOpsDeployer();
   const deployLead = useDeployOpsLead();
+  const updateLead = useUpdateOpsLead();
 
   // ── Build staff lookup for name resolution (all staff, including sales) ──
   const staffLookup = useMemo(() => {
@@ -102,12 +107,12 @@ export function OpsKanbanPage() {
     return map;
   }, [staffQuery.data]);
 
-  // ── Operators only (filtered to ops_operator role, no sales) ──
-  const operators = useMemo(() => {
-    const items = operatorsQuery.data?.items;
+  /** All staff for CS / operator / logistics pickers (not only ops_operator). */
+  const assignableStaff = useMemo(() => {
+    const items = staffQuery.data?.items;
     if (!items) return [];
     return items.map(adaptStaff);
-  }, [operatorsQuery.data]);
+  }, [staffQuery.data]);
 
   // ── Fetch assignments for all leads ──
   const leadIds = useMemo(() => {
@@ -140,6 +145,103 @@ export function OpsKanbanPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [allocatingLead, setAllocatingLead] = useState<Lead | null>(null);
+  const [shipmentDialogLeadId, setShipmentDialogLeadId] = useState<string | null>(null);
+  const [deploymentDialogLeadId, setDeploymentDialogLeadId] = useState<string | null>(null);
+
+  const rawLead = useCallback(
+    (leadId: string) => leadsQuery.data?.items.find((l) => l.id === leadId),
+    [leadsQuery.data?.items],
+  );
+
+  const handleAssignVisitPrimary = useCallback(
+    async (leadId: string, staffId: string, date: string, role: VisitRole) => {
+      const raw = rawLead(leadId);
+      if (!raw) return;
+      try {
+        await assignVerifier.mutateAsync({
+          leadId,
+          staff_id: staffId,
+          scheduled_date: date,
+        });
+        await updateLead.mutateAsync({
+          leadId,
+          body: {
+            metadata: mergeOpsLeadMetadata(raw.metadata as Record<string, unknown>, {
+              [META_VISIT_VERIFIER_ROLE]: role,
+            }),
+          },
+        });
+      } catch {
+        /* assign-verifier / PATCH surfaces mutation error via React Query */
+      }
+    },
+    [assignVerifier, updateLead, rawLead],
+  );
+
+  const handleAssignVisitSecondary = useCallback(
+    (leadId: string, staffId: string, date: string, role: VisitRole) => {
+      const raw = rawLead(leadId);
+      if (!raw) return;
+      updateLead.mutate({
+        leadId,
+        body: {
+          metadata: mergeOpsLeadMetadata(raw.metadata as Record<string, unknown>, {
+            [META_VISIT_SECONDARY_STAFF_ID]: staffId,
+            [META_VISIT_SECONDARY_SCHEDULED_DATE]: date,
+            [META_VISIT_SECONDARY_ROLE]: role,
+          }),
+        },
+      });
+    },
+    [updateLead, rawLead],
+  );
+
+  const handleShipmentLogisticsSave = useCallback(
+    (leadId: string, fields: ShipmentLogisticsFields) => {
+      const raw = rawLead(leadId);
+      if (!raw) return;
+      updateLead.mutate({
+        leadId,
+        body: {
+          metadata: mergeOpsLeadMetadata(raw.metadata as Record<string, unknown>, {
+            [META_SHIPMENT_EXPECTED_DELIVERY]: fields.expectedDelivery,
+            [META_SHIPMENT_CARRIER]: fields.carrier,
+            [META_SHIPMENT_TRACKING]: fields.tracking,
+            [META_SHIPMENT_LOGISTICS_NOTES]: fields.logisticsNotes,
+          }),
+        },
+      });
+    },
+    [updateLead, rawLead],
+  );
+
+  const handleDeploymentPrepConfirm = useCallback(
+    async (leadId: string, crew: CrewDraftRow[], scheduledDate: string, scheduledTime: string) => {
+      const raw = rawLead(leadId);
+      if (!raw || crew.length === 0) return;
+      const chiefFirst = crew.find((c) => c.role === "chief_operator") ?? crew[0];
+      const crewJson = crew.map((c) => ({ staff_id: c.staffId, role: c.role }));
+      try {
+        await assignDeployer.mutateAsync({
+          leadId,
+          staff_id: chiefFirst.staffId,
+          scheduled_date: scheduledDate,
+          scheduled_time: scheduledTime,
+        });
+        updateLead.mutate({
+          leadId,
+          body: {
+            metadata: mergeOpsLeadMetadata(raw.metadata as Record<string, unknown>, {
+              [META_DEPLOYMENT_CREW]: crewJson,
+            }),
+          },
+        });
+      } catch {
+        /* mutation error via React Query */
+      }
+    },
+    [assignDeployer, updateLead, rawLead],
+  );
 
   // ── Map data ──
   const mapPins: DeploymentPin[] = useMemo(() => {
@@ -200,13 +302,8 @@ export function OpsKanbanPage() {
     }
 
     const leadPins = Array.from(byCity.entries()).map(([city, { leads: cityLeads, lat, lng }]) => {
-      const stageOrder: LeadStage[] = ["Leads", "Pending Visit", "Pending Allocation", "Pending Shipment", "Pending Deployment"];
-      let bestStage: LeadStage = cityLeads[0].stage;
-      for (const l of cityLeads) {
-        if (stageOrder.indexOf(l.stage) > stageOrder.indexOf(bestStage)) {
-          bestStage = l.stage;
-        }
-      }
+      const visualStatuses = cityLeads.map((l) => mapVisualStatusForLead(l));
+      const mapStatus = maxMapVisualStatus(visualStatuses);
       const totalWorkers = cityLeads.reduce((sum, l) => sum + l.headcount, 0);
       const totalDevices = cityLeads.reduce((sum, l) => sum + (l.deviceCount ?? 0), 0);
       const names = cityLeads.map((l) => l.site).join(", ");
@@ -216,7 +313,7 @@ export function OpsKanbanPage() {
         city,
         latitude: lat,
         longitude: lng,
-        status: STAGE_TO_MAP_STATUS[bestStage],
+        status: mapStatus,
         quantity: totalDevices || totalWorkers,
         pocName: cityLeads.length === 1 ? names : `${city} (${cityLeads.length} sites)`,
       };
@@ -228,7 +325,7 @@ export function OpsKanbanPage() {
   const mapTransit: TransitRow[] = useMemo(() => {
     if (allocatingLead) return [];
     return leads
-      .filter((l) => l.stage === "Pending Shipment" && l.deploymentRegion)
+      .filter((l) => l.stage === "Shipment" && l.deploymentRegion)
       .map((l) => ({
         id: l.id,
         route: `${l.deploymentRegion} → ${l.city}`,
@@ -264,6 +361,13 @@ export function OpsKanbanPage() {
 
   const selectedLead = selectedLeadId
     ? leads.find((l) => l.id === selectedLeadId) ?? null
+    : null;
+
+  const shipmentDialogLead = shipmentDialogLeadId
+    ? leads.find((l) => l.id === shipmentDialogLeadId) ?? null
+    : null;
+  const deploymentDialogLead = deploymentDialogLeadId
+    ? leads.find((l) => l.id === deploymentDialogLeadId) ?? null
     : null;
 
   return (
@@ -308,9 +412,7 @@ export function OpsKanbanPage() {
                   <div className="px-3 py-2 space-y-1">
                     <div className="flex justify-between text-[11px]">
                       <span className="text-muted-foreground">Stage</span>
-                      <span className="font-medium text-right max-w-[140px]">
-                        {STAGE_DISPLAY_LABEL[selectedLead.stage]}
-                      </span>
+                      <span className="font-medium">{selectedLead.stage}</span>
                     </div>
                     <div className="flex justify-between text-[11px]">
                       <span className="text-muted-foreground">Workers</span>
@@ -359,10 +461,10 @@ export function OpsKanbanPage() {
             <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-border">
               <div className="flex items-baseline gap-2">
                 <h1 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-foreground">
-                  Sales → CS → Allocation → Ship → Deploy
+                  Pipeline
                 </h1>
                 <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {leads.length} active
+                  {leads.length} leads
                 </span>
                 {leadsQuery.isLoading && (
                   <span className="text-[10px] text-muted-foreground animate-pulse">Loading…</span>
@@ -382,15 +484,14 @@ export function OpsKanbanPage() {
 
             <KanbanBoard
               leads={leads}
-              operators={operators}
+              staff={assignableStaff}
               isLoading={leadsQuery.isLoading}
               selectedLeadId={selectedLeadId}
               onSelectLead={setSelectedLeadId}
               onAccept={(id) => acceptLead.mutate(id)}
               onReject={(id) => rejectLead.mutate(id)}
-              onAssignVerifier={(id, staffId, date) =>
-                assignVerifier.mutate({ leadId: id, staff_id: staffId, scheduled_date: date })
-              }
+              onAssignVisitPrimary={handleAssignVisitPrimary}
+              onAssignVisitSecondary={handleAssignVisitSecondary}
               onMarkVerified={(id) => verifyLead.mutate(id)}
               onAllocate={(leadId) => {
                 const lead = leads.find((l) => l.id === leadId);
@@ -401,14 +502,27 @@ export function OpsKanbanPage() {
               }
               onMarkDispatched={(id) => dispatchLead.mutate(id)}
               onMarkDelivered={(id) => deliverLead.mutate(id)}
-              onAssignDeployer={(id, staffId, date, time) =>
-                assignDeployer.mutate({ leadId: id, staff_id: staffId, scheduled_date: date, scheduled_time: time })
-              }
+              onOpenShipmentDetails={setShipmentDialogLeadId}
+              onOpenDeploymentPrep={setDeploymentDialogLeadId}
               onConfirmDeploy={(id) => deployLead.mutate(id)}
             />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <ShipmentLogisticsDialog
+        lead={shipmentDialogLead}
+        open={shipmentDialogLeadId !== null}
+        onOpenChange={(open) => { if (!open) setShipmentDialogLeadId(null); }}
+        onSave={(leadId, fields) => handleShipmentLogisticsSave(leadId, fields)}
+      />
+      <DeploymentPrepDialog
+        lead={deploymentDialogLead}
+        open={deploymentDialogLeadId !== null}
+        staff={assignableStaff}
+        onOpenChange={(open) => { if (!open) setDeploymentDialogLeadId(null); }}
+        onConfirm={(leadId, crew, date, time) => void handleDeploymentPrepConfirm(leadId, crew, date, time)}
+      />
     </div>
   );
 }

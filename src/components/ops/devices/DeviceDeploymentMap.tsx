@@ -23,7 +23,7 @@ const STATUS_COLORS: Record<string, { fill: string; border: string; label: strin
   new: { fill: "#fbbf24", border: "#d97706", label: "New" },
   allocating: { fill: "#60a5fa", border: "#3b82f6", label: "Pending Allocation" },
   shipping: { fill: "#a78bfa", border: "#7c3aed", label: "Pending Shipment" },
-  deploying: { fill: "#34d399", border: "#059669", label: "Pending Deployment" },
+  deploying: { fill: "#34d399", border: "#059669", label: "Deploying" },
   source: { fill: "#60a5fa", border: "#3b82f6", label: "Hub" },
   target: { fill: "#f97316", border: "#ea580c", label: "Target" },
 };

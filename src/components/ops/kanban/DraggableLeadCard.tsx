@@ -3,43 +3,46 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { LeadCard } from "./LeadCard";
-import { canDrag, type Lead, type Operator } from "./ops-kanban-data";
+import { canDrag, type Lead, type Operator, type VisitRole } from "./ops-kanban-data";
 
 interface DraggableLeadCardProps {
   lead: Lead;
   selected?: boolean;
   onSelect?: () => void;
-  operators?: Operator[];
+  staff?: Operator[];
   onAccept?: () => void;
   onReject?: () => void;
-  onAssignVerifier?: (staffId: string, date: string) => void;
+  onAssignVisitPrimary?: (staffId: string, date: string, role: VisitRole) => void;
+  onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
   onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
-  onAssignDeployer?: (staffId: string, date: string, time: string) => void;
+  onOpenShipmentDetails?: () => void;
+  onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
 }
 
 /**
- * Draggable wrapper around LeadCard — Sales column cards are not draggable;
- * CS onward supports drag when the transition graph allows it.
+ * Draggable wrapper — disabled until sales accepts, and frozen once deployed.
  */
 export function DraggableLeadCard({
   lead,
   selected,
   onSelect,
-  operators,
+  staff,
   onAccept,
   onReject,
-  onAssignVerifier,
+  onAssignVisitPrimary,
+  onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
   onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
-  onAssignDeployer,
+  onOpenShipmentDetails,
+  onOpenDeploymentPrep,
   onConfirmDeploy,
 }: DraggableLeadCardProps) {
   const draggable = canDrag(lead);
@@ -67,16 +70,18 @@ export function DraggableLeadCard({
         selected={selected}
         onSelect={onSelect}
         isDragging={isDragging}
-        operators={operators}
+        staff={staff}
         onAccept={onAccept}
         onReject={onReject}
-        onAssignVerifier={onAssignVerifier}
+        onAssignVisitPrimary={onAssignVisitPrimary}
+        onAssignVisitSecondary={onAssignVisitSecondary}
         onMarkVerified={onMarkVerified}
         onAllocate={onAllocate}
         onAssignShipper={onAssignShipper}
         onMarkDispatched={onMarkDispatched}
         onMarkDelivered={onMarkDelivered}
-        onAssignDeployer={onAssignDeployer}
+        onOpenShipmentDetails={onOpenShipmentDetails}
+        onOpenDeploymentPrep={onOpenDeploymentPrep}
         onConfirmDeploy={onConfirmDeploy}
       />
     </div>

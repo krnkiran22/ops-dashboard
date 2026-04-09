@@ -1,119 +1,150 @@
 "use client";
 
 /**
- * Compact utilization list — sorted by urgency (soonest-to-free first).
- * Each row answers: where, how many, when free, what's next.
- *
- * Derives active deployments from leads with status 'deployed'
- * that have planned_start and planned_end dates.
+ * Sidebar summary: total devices on live factories vs devices still tied to
+ * in-flight leads (not yet deployed). Replaces the old per-site timeline view.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useOpsLeads } from "@/lib/queries/operations";
+import { TERMINAL_STATUSES } from "@/components/ops/kanban/ops-kanban-data";
 
-interface ActiveDeployment {
-  id: string;
-  site: string;
-  city: string;
-  devices: number;
-  duration: number;
-  daysElapsed: number;
-}
+/** Sort not-yet-live leads: closest to deployment first. */
+const PIPELINE_ORDER: Record<string, number> = {
+  pending_deployment: 0,
+  pending_shipment: 1,
+  pending_allocation: 2,
+  pending_visit: 3,
+  accepted: 4,
+  confirmed: 5,
+  lead: 6,
+  deferred: 7,
+};
 
-function urgencyColor(daysLeft: number) {
-  if (daysLeft <= 3) return "bg-red-500";
-  if (daysLeft <= 7) return "bg-yellow-500";
-  return "bg-green-500";
-}
-
-function urgencyText(daysLeft: number) {
-  if (daysLeft <= 3) return "text-red-600 dark:text-red-400";
-  if (daysLeft <= 7) return "text-yellow-600 dark:text-yellow-400";
-  return "text-muted-foreground";
+function statusSummaryLabel(status: string): string {
+  switch (status) {
+    case "pending_deployment":
+      return "Deploying";
+    case "pending_shipment":
+      return "Shipment";
+    case "pending_allocation":
+      return "Allocation";
+    case "pending_visit":
+      return "Site visit";
+    case "accepted":
+      return "Customer success";
+    case "confirmed":
+    case "lead":
+      return "Sales";
+    case "deferred":
+      return "Deferred";
+    default:
+      return status;
+  }
 }
 
 export function UtilizationPanel() {
   const leadsQuery = useOpsLeads();
-  const [now] = useState(() => Date.now());
 
-  const active: ActiveDeployment[] = useMemo(() => {
-    const items = leadsQuery.data?.items;
-    if (!items) return [];
+  const { deployedDevices, deployedFactories, outstanding, outstandingDevices, outstandingFactories } =
+    useMemo(() => {
+      const items = leadsQuery.data?.items ?? [];
+      let deployedDevices = 0;
+      let deployedFactories = 0;
+      const outstanding: {
+        id: string;
+        site: string;
+        city: string;
+        devices: number;
+        status: string;
+      }[] = [];
 
-    return items
-      .filter((l) => l.status === "deployed" && l.planned_start && l.planned_end)
-      .map((l) => {
-        const start = new Date(l.planned_start!).getTime();
-        const end = new Date(l.planned_end!).getTime();
-        const durationDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-        const elapsed = Math.max(0, Math.ceil((now - start) / (1000 * 60 * 60 * 24)));
-        return {
+      for (const l of items) {
+        const n = l.device_count ?? 0;
+        if (l.status === "deployed" && n > 0) {
+          deployedDevices += n;
+          deployedFactories += 1;
+          continue;
+        }
+        if (TERMINAL_STATUSES.has(l.status)) continue;
+        if (l.status === "deployed") continue;
+        if (n <= 0) continue;
+        outstanding.push({
           id: l.id,
           site: l.factory_name,
           city: l.city ?? "",
-          devices: l.device_count ?? 0,
-          duration: durationDays,
-          daysElapsed: Math.min(elapsed, durationDays),
-        };
-      });
-  }, [leadsQuery.data, now]);
+          devices: n,
+          status: l.status,
+        });
+      }
 
-  const sorted = useMemo(
-    () => [...active].sort((a, b) => (a.duration - a.daysElapsed) - (b.duration - b.daysElapsed)),
-    [active],
-  );
+      outstanding.sort(
+        (a, b) => (PIPELINE_ORDER[a.status] ?? 99) - (PIPELINE_ORDER[b.status] ?? 99) || a.site.localeCompare(b.site),
+      );
+
+      const outstandingDevices = outstanding.reduce((s, r) => s + r.devices, 0);
+      const outstandingFactories = outstanding.length;
+
+      return {
+        deployedDevices,
+        deployedFactories,
+        outstanding,
+        outstandingDevices,
+        outstandingFactories,
+      };
+    }, [leadsQuery.data?.items]);
 
   return (
     <div className="h-full flex flex-col border-l border-border bg-card">
       <div className="shrink-0 px-3 py-2 border-b border-border">
-        <h2 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-foreground">
-          Utilization
-        </h2>
-        <div className="text-[10px] text-muted-foreground">
-          {sorted.length} active · {sorted.reduce((s, d) => s + d.devices, 0)} devices
+        <h2 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-foreground">Utilization</h2>
+        <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+          Live deployments vs devices still planned for factories not yet recording.
+        </p>
+      </div>
+
+      <div className="shrink-0 px-3 py-2 border-b border-border/60 space-y-2 bg-muted/20">
+        <div>
+          <div className="text-[9px] uppercase tracking-wide font-semibold text-muted-foreground">Devices deployed</div>
+          <div className="text-[13px] font-semibold tabular-nums text-foreground">
+            {deployedDevices.toLocaleString()}{" "}
+            <span className="text-[10px] font-normal text-muted-foreground">
+              devices · {deployedFactories} {deployedFactories === 1 ? "factory" : "factories"} live
+            </span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] uppercase tracking-wide font-semibold text-muted-foreground">
+            Not live yet (deficit vs deployed)
+          </div>
+          <div className="text-[13px] font-semibold tabular-nums text-foreground">
+            {outstandingDevices.toLocaleString()}{" "}
+            <span className="text-[10px] font-normal text-muted-foreground">
+              devices · {outstandingFactories} {outstandingFactories === 1 ? "factory" : "factories"}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        {sorted.length === 0 && (
-          <div className="flex items-center justify-center h-24 text-[10px] text-muted-foreground">
-            No active deployments
+      <div className="flex-1 overflow-auto min-h-0">
+        <div className="px-3 py-1.5 text-[9px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border/40">
+          Factories still to go live
+        </div>
+        {outstanding.length === 0 && (
+          <div className="flex items-center justify-center h-24 text-[10px] text-muted-foreground px-3 text-center">
+            No pending device commitments — all tracked leads are live or have no device count.
           </div>
         )}
-
-        {sorted.map((d) => {
-          const daysLeft = d.duration - d.daysElapsed;
-          const pct = Math.round((d.daysElapsed / d.duration) * 100);
-
-          return (
-            <div
-              key={d.id}
-              className="px-3 py-2 border-b border-border/30 hover:bg-muted/10 cursor-pointer"
-            >
-              <div className="text-[11px] font-medium truncate mb-1">{d.site}</div>
-
-              <div className="h-[3px] bg-muted mb-1">
-                <div
-                  className={`h-full ${urgencyColor(daysLeft)}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-
-              <div className="flex items-baseline justify-between mb-0.5">
-                <span className={`text-[10px] tabular-nums font-semibold ${urgencyText(daysLeft)}`}>
-                  {daysLeft}d left
-                </span>
-                <span className="text-[10px] tabular-nums text-muted-foreground">
-                  {d.devices} devices · {d.daysElapsed}/{d.duration}d
-                </span>
-              </div>
-
-              <div className="flex items-baseline justify-between">
-                <span className="text-[10px] text-muted-foreground">{d.city}</span>
-              </div>
+        {outstanding.map((row) => (
+          <div key={row.id} className="px-3 py-2 border-b border-border/30 hover:bg-muted/10">
+            <div className="text-[11px] font-medium truncate">{row.site}</div>
+            <div className="flex items-baseline justify-between gap-2 mt-0.5">
+              <span className="text-[10px] text-muted-foreground truncate">{row.city}</span>
+              <span className="text-[10px] tabular-nums text-foreground shrink-0">{row.devices} devices</span>
             </div>
-          );
-        })}
+            <div className="text-[9px] text-muted-foreground mt-0.5">{statusSummaryLabel(row.status)}</div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -8,61 +8,94 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { STAGE_DISPLAY_LABEL, type Lead, type Operator } from "./ops-kanban-data";
+import type { Lead, Operator, VisitRole } from "./ops-kanban-data";
+import {
+  visitHasSiteVisitor,
+  visitCanAddSecondary,
+  visitRolesStillNeeded,
+  canConfirmDeploymentComplete,
+} from "./ops-kanban-data";
 
 const STAGE_ACCENT: Record<Lead["stage"], string> = {
-  Leads: "bg-yellow-500",
-  "Pending Visit": "bg-orange-500",
-  "Pending Allocation": "bg-blue-500",
-  "Pending Shipment": "bg-violet-500",
-  "Pending Deployment": "bg-green-500",
+  Sales: "bg-yellow-500",
+  "Customer Success": "bg-orange-500",
+  Allocation: "bg-blue-500",
+  Shipment: "bg-violet-500",
+  Deployment: "bg-emerald-600",
 };
 
 interface Props {
   lead: Lead;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  operators: Operator[];
+  staff: Operator[];
   onAccept?: () => void;
   onReject?: () => void;
-  onAssignVerifier?: (staffId: string, date: string) => void;
+  onAssignVisitPrimary?: (staffId: string, date: string, role: VisitRole) => void;
+  onAssignVisitSecondary?: (staffId: string, date: string, role: VisitRole) => void;
   onMarkVerified?: () => void;
   onAllocate?: () => void;
   onAssignShipper?: (staffId: string, date: string) => void;
   onMarkDispatched?: () => void;
   onMarkDelivered?: () => void;
-  onAssignDeployer?: (staffId: string, date: string, time: string) => void;
+  onOpenShipmentDetails?: () => void;
+  onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
 }
 
 /**
- * Full detail dialog for a pipeline lead — shows all info plus
- * contextual action buttons for the current stage.
+ * Full lead detail with contextual actions aligned to the five-column pipeline.
  */
 export function LeadDetailDialog({
   lead,
   open,
   onOpenChange,
-  operators,
+  staff,
   onAccept,
   onReject,
-  onAssignVerifier,
+  onAssignVisitPrimary,
+  onAssignVisitSecondary,
   onMarkVerified,
   onAllocate,
   onAssignShipper,
   onMarkDispatched,
   onMarkDelivered,
-  onAssignDeployer,
+  onOpenShipmentDetails,
+  onOpenDeploymentPrep,
   onConfirmDeploy,
 }: Props) {
   const [staffDraft, setStaffDraft] = useState({ op: "", date: "", time: "" });
-  const [showAssignForm, setShowAssignForm] = useState<"verifier" | "shipper" | "deployer" | null>(null);
+  const [showAssignForm, setShowAssignForm] = useState<"visit" | "shipper" | null>(null);
+  const [visitSlot, setVisitSlot] = useState<"primary" | "secondary">("primary");
+  const [visitRole, setVisitRole] = useState<VisitRole>("customer_success");
+  const [visitAllowedRoles, setVisitAllowedRoles] = useState<VisitRole[]>(["customer_success", "chief_operator"]);
 
   const todayStr = new Date().toISOString().split("T")[0];
 
   const resetForm = () => {
     setStaffDraft({ op: "", date: "", time: "" });
     setShowAssignForm(null);
+  };
+
+  const canPrimaryVisit = !lead.verifierStaffId;
+  const canSecondaryVisit = visitCanAddSecondary(lead);
+  const stillNeeded = visitRolesStillNeeded(lead);
+  const showAddFirstVisitor = canPrimaryVisit;
+  const showAddSecondVisitor = canSecondaryVisit && stillNeeded.length > 0;
+
+  const openVisit = (slot: "primary" | "secondary") => {
+    const needed = visitRolesStillNeeded(lead);
+    const allowedRoles: VisitRole[] =
+      slot === "primary" && !visitHasSiteVisitor(lead)
+        ? ["customer_success", "chief_operator"]
+        : needed;
+    if (allowedRoles.length === 0) return;
+    const role = allowedRoles.includes("customer_success") ? "customer_success" : allowedRoles[0];
+    setVisitSlot(slot);
+    setVisitRole(role);
+    setVisitAllowedRoles(allowedRoles);
+    setShowAssignForm("visit");
+    setStaffDraft((d) => ({ ...d, op: "", date: "" }));
   };
 
   return (
@@ -72,22 +105,22 @@ export function LeadDetailDialog({
 
         <DialogHeader>
           <DialogTitle>{lead.site}</DialogTitle>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-[11px] text-muted-foreground">{lead.city}</span>
             <span className="text-[9px] uppercase tracking-wide font-semibold text-muted-foreground px-1.5 py-0.5 bg-muted">
-              {STAGE_DISPLAY_LABEL[lead.stage]}
+              {lead.stage}
+              {lead.stage === "Deployment" && lead.status === "deployed" ? " · Live" : ""}
+              {lead.stage === "Deployment" && lead.status === "pending_deployment" ? " · Pending" : ""}
             </span>
           </div>
         </DialogHeader>
 
-        {/* Core metrics */}
         <div className="grid grid-cols-3 gap-3 py-3 border-y border-border">
           <Metric label="Workers" value={String(lead.headcount)} />
           <Metric label="Duration" value={`${lead.duration} days`} />
           <Metric label="Rep" value={lead.rep} />
         </div>
 
-        {/* Factory profile */}
         <div className="space-y-1 py-2">
           {lead.industry && <Row label="Industry" value={lead.industry} />}
           {lead.shifts != null && <Row label="Shifts" value={String(lead.shifts)} />}
@@ -99,50 +132,85 @@ export function LeadDetailDialog({
           {lead.plannedEnd && <Row label="End" value={lead.plannedEnd} />}
         </div>
 
-        {/* Pipeline assignments */}
-        {lead.verifier && (
+        {visitHasSiteVisitor(lead) && lead.stage !== "Sales" && (
           <div className="space-y-1 pt-2 border-t border-border/50">
-            <SectionLabel>Customer Success — site verification</SectionLabel>
-            <Row label="Assigned operator" value={lead.verifier} />
-            {lead.visitDate && <Row label="Visit date" value={lead.visitDate} />}
+            <SectionLabel>Site visit</SectionLabel>
+            {lead.verifierStaffId && (
+              <Row
+                label={
+                  lead.visitVerifierRole === "customer_success"
+                    ? "CS"
+                    : lead.visitVerifierRole === "chief_operator"
+                      ? "Chief"
+                      : "Visit"
+                }
+                value={`${lead.verifier ?? ""}${lead.visitDate ? ` · ${lead.visitDate}` : ""}`}
+              />
+            )}
+            {lead.visitSecondaryStaffId && (
+              <Row
+                label={
+                  lead.visitSecondaryRole === "customer_success"
+                    ? "CS"
+                    : lead.visitSecondaryRole === "chief_operator"
+                      ? "Chief"
+                      : "Visit"
+                }
+                value={`${lead.visitSecondaryName ?? ""}${lead.visitSecondaryDate ? ` · ${lead.visitSecondaryDate}` : ""}`}
+              />
+            )}
           </div>
         )}
 
         {lead.deploymentDeviceCount != null && (
           <div className="space-y-1 pt-2 border-t border-border/50">
-            <SectionLabel>Allocation</SectionLabel>
+            <SectionLabel>Devices</SectionLabel>
             {lead.deploymentRegion && <Row label="Region" value={lead.deploymentRegion} />}
-            <Row label="Devices" value={String(lead.deploymentDeviceCount)} />
+            <Row label="Count" value={String(lead.deploymentDeviceCount)} />
+          </div>
+        )}
+
+        {lead.stage === "Shipment" && (lead.shipmentCarrier || lead.shipmentExpectedDelivery) && (
+          <div className="space-y-1 pt-2 border-t border-border/50">
+            <SectionLabel>Logistics</SectionLabel>
+            {lead.shipmentExpectedDelivery && <Row label="ETA" value={lead.shipmentExpectedDelivery} />}
+            {lead.shipmentCarrier && <Row label="Carrier" value={lead.shipmentCarrier} />}
+            {lead.shipmentTracking && <Row label="Tracking" value={lead.shipmentTracking} />}
           </div>
         )}
 
         {lead.shipper && (
           <div className="space-y-1 pt-2 border-t border-border/50">
-            <SectionLabel>Shipment</SectionLabel>
-            <Row label="Shipper" value={lead.shipper} />
+            <SectionLabel>Shipper</SectionLabel>
+            <Row label="Assigned" value={lead.shipper} />
           </div>
         )}
 
-        {lead.deployer && (
+        {(lead.deployer || lead.deploymentCrew.length > 0) && (
           <div className="space-y-1 pt-2 border-t border-border/50">
             <SectionLabel>Deployment</SectionLabel>
-            <Row label="Deployer" value={lead.deployer} />
-            <Row label="Date" value={lead.deployDate ?? "—"} />
-            <Row label="Time" value={lead.deployTime ?? "—"} />
+            {lead.deploymentCrew.map((c) => (
+              <Row key={`${c.staffId}-${c.role}`} label={c.role === "chief_operator" ? "Chief" : "Operator"} value={c.name} />
+            ))}
+            {lead.deploymentCrew.length === 0 && lead.deployer && (
+              <>
+                <Row label="Deployer" value={lead.deployer} />
+                <Row label="Date" value={lead.deployDate ?? "—"} />
+                <Row label="Time" value={lead.deployTime ?? "—"} />
+              </>
+            )}
           </div>
         )}
 
         {lead.notes && (
           <div className="pt-2 border-t border-border/50">
-            <SectionLabel>Protocols</SectionLabel>
+            <SectionLabel>Notes</SectionLabel>
             <div className="text-[11px] leading-relaxed mt-1">{lead.notes}</div>
           </div>
         )}
 
-        {/* ── Actions ── */}
         <div className="pt-3 border-t border-border space-y-2">
-          {/* Leads: accept/reject */}
-          {lead.stage === "Leads" && (lead.status === "lead" || lead.status === "confirmed") && (
+          {lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
             <div className="flex gap-2">
               <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onAccept?.(); onOpenChange(false); }}>
                 Accept
@@ -155,100 +223,120 @@ export function LeadDetailDialog({
             </div>
           )}
 
-          {/* Pending Visit (CS): verify / reject */}
-          {lead.stage === "Pending Visit" && lead.verifier && !showAssignForm && (
-            <div className="flex gap-2">
-              <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkVerified?.(); onOpenChange(false); }}>
-                Mark verified (site OK for allocation)
-              </Button>
-              <Button size="sm" variant="destructive" className="h-8 text-[11px]" onClick={() => {
-                if (window.confirm(`Reject "${lead.site}"?`)) { onReject?.(); onOpenChange(false); }
-              }}>
-                Reject
-              </Button>
-            </div>
+          {lead.stage === "Customer Success" && !showAssignForm && (
+            <>
+              {!visitHasSiteVisitor(lead) && showAddFirstVisitor && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold">
+                    Schedule site visit
+                  </span>
+                  <Button size="sm" variant="outline" className="h-8 text-[11px] w-full" onClick={() => openVisit("primary")}>
+                    Add site visitor
+                  </Button>
+                </div>
+              )}
+              {visitHasSiteVisitor(lead) && (
+                <>
+                  {showAddSecondVisitor && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => openVisit("secondary")}>
+                        Add second visitor
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkVerified?.(); onOpenChange(false); }}>
+                      Mark verified
+                    </Button>
+                    <Button size="sm" variant="destructive" className="h-8 text-[11px]" onClick={() => {
+                      if (window.confirm(`Reject "${lead.site}"?`)) { onReject?.(); onOpenChange(false); }
+                    }}>
+                      Reject
+                    </Button>
+                  </div>
+                </>
+              )}
+            </>
           )}
 
-          {/* Pending Visit (CS): assign operator */}
-          {lead.stage === "Pending Visit" && !lead.verifier && !showAssignForm && (
-            <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => setShowAssignForm("verifier")}>
-              Assign CS operator
+          {lead.stage === "Allocation" && (
+            <Button size="sm" className="w-full h-8 text-[11px]" onClick={() => { onAllocate?.(); onOpenChange(false); }}>
+              Allocate devices
             </Button>
           )}
 
-          {/* Pending Allocation: map allocation + reject */}
-          {lead.stage === "Pending Allocation" && !showAssignForm && (
-            <div className="space-y-2">
-              <p className="text-[10px] text-muted-foreground leading-snug">
-                Use the map above: enter allocation mode, pick a hub, and confirm how many devices ship to this factory.
-              </p>
-              <Button size="sm" className="w-full h-8 text-[11px]" onClick={() => { onAllocate?.(); onOpenChange(false); }}>
-                Allocate devices on map…
+          {lead.stage === "Shipment" && lead.status === "pending_shipment" && (
+            <>
+              <Button size="sm" variant="secondary" className="w-full h-8 text-[11px]" onClick={() => { onOpenShipmentDetails?.(); }}>
+                Shipment & logistics details
+              </Button>
+              {!lead.shipper && !showAssignForm && (
+                <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => setShowAssignForm("shipper")}>
+                  Assign shipper
+                </Button>
+              )}
+              {lead.shipper && !showAssignForm && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkDispatched?.(); }}>
+                    Dispatched
+                  </Button>
+                  <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkDelivered?.(); onOpenChange(false); }}>
+                    Delivered
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+
+          {lead.stage === "Deployment" && lead.status === "pending_deployment" && (
+            <>
+              <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => { onOpenDeploymentPrep?.(); }}>
+                Plan deployment crew
               </Button>
               <Button
                 size="sm"
-                variant="destructive"
                 className="w-full h-8 text-[11px]"
+                disabled={!canConfirmDeploymentComplete(lead)}
+                title={
+                  canConfirmDeploymentComplete(lead)
+                    ? undefined
+                    : "Plan deployment crew before marking deployed"
+                }
                 onClick={() => {
-                  if (window.confirm(`Reject "${lead.site}"?`)) {
-                    onReject?.();
-                    onOpenChange(false);
-                  }
+                  if (window.confirm(`Confirm deployment for "${lead.site}"?`)) { onConfirmDeploy?.(); onOpenChange(false); }
                 }}
               >
-                Reject
+                Confirm deployed
               </Button>
-            </div>
+            </>
           )}
 
-          {/* Pending Shipment: assign shipper → dispatch → deliver */}
-          {lead.stage === "Pending Shipment" && !lead.shipper && !showAssignForm && (
-            <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => setShowAssignForm("shipper")}>
-              Assign Shipper
-            </Button>
-          )}
-          {lead.stage === "Pending Shipment" && lead.shipper && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkDispatched?.(); }}>
-                Mark Dispatched
-              </Button>
-              <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onMarkDelivered?.(); onOpenChange(false); }}>
-                Mark Delivered
-              </Button>
-            </div>
-          )}
-
-          {/* Pending Deployment: assign deployer → confirm */}
-          {lead.stage === "Pending Deployment" && !lead.deployer && !showAssignForm && (
-            <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => setShowAssignForm("deployer")}>
-              Schedule Deployment
-            </Button>
-          )}
-          {lead.stage === "Pending Deployment" && lead.deployer && (
-            <Button size="sm" className="w-full h-8 text-[11px]" onClick={() => {
-              if (window.confirm(`Confirm deployment for "${lead.site}"?`)) { onConfirmDeploy?.(); onOpenChange(false); }
-            }}>
-              Confirm Deployment
-            </Button>
-          )}
-
-          {/* Inline assignment form (verifier / shipper / deployer) */}
-          {showAssignForm && (
+          {showAssignForm === "visit" && (
             <div className="space-y-2 pt-2 border-t border-border/50">
-              <SectionLabel>
-                {showAssignForm === "verifier"
-                  ? "Assign CS operator (site visit)"
-                  : showAssignForm === "shipper"
-                    ? "Assign shipper"
-                    : "Schedule deployment ops"}
-              </SectionLabel>
+              <SectionLabel>{visitSlot === "primary" ? "Primary visit" : "Additional visitor"}</SectionLabel>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Role</div>
+              <select
+                value={visitRole}
+                onChange={(e) => {
+                  const r = e.target.value as VisitRole;
+                  if (visitAllowedRoles.includes(r)) setVisitRole(r);
+                }}
+                className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
+              >
+                {visitAllowedRoles.map((r) => (
+                  <option key={r} value={r}>
+                    {r === "customer_success" ? "Customer Success" : "Chief operator"}
+                  </option>
+                ))}
+              </select>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Staff</div>
               <select
                 value={staffDraft.op}
                 onChange={(e) => setStaffDraft((d) => ({ ...d, op: e.target.value }))}
                 className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
               >
-                <option value="">Select ops operator…</option>
-                {operators.map((op) => (
+                <option value="">Select staff…</option>
+                {staff.map((op) => (
                   <option key={op.id} value={op.id}>{op.name}</option>
                 ))}
               </select>
@@ -259,30 +347,57 @@ export function LeadDetailDialog({
                 onChange={(e) => setStaffDraft((d) => ({ ...d, date: e.target.value }))}
                 className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
               />
-              {showAssignForm === "deployer" && (
-                <input
-                  type="time"
-                  value={staffDraft.time}
-                  onChange={(e) => setStaffDraft((d) => ({ ...d, time: e.target.value }))}
-                  className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
-                />
-              )}
               <div className="flex gap-2">
                 <Button
                   size="sm"
                   className="flex-1 h-8 text-[11px]"
-                  disabled={
-                    !staffDraft.op || !staffDraft.date ||
-                    (showAssignForm === "deployer" && !staffDraft.time)
-                  }
+                  disabled={!staffDraft.op || !staffDraft.date}
                   onClick={() => {
-                    if (showAssignForm === "verifier") {
-                      onAssignVerifier?.(staffDraft.op, staffDraft.date);
-                    } else if (showAssignForm === "shipper") {
-                      onAssignShipper?.(staffDraft.op, staffDraft.date);
+                    if (visitSlot === "primary") {
+                      onAssignVisitPrimary?.(staffDraft.op, staffDraft.date, visitRole);
                     } else {
-                      onAssignDeployer?.(staffDraft.op, staffDraft.date, staffDraft.time);
+                      onAssignVisitSecondary?.(staffDraft.op, staffDraft.date, visitRole);
                     }
+                    resetForm();
+                    onOpenChange(false);
+                  }}
+                >
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={resetForm}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {showAssignForm === "shipper" && (
+            <div className="space-y-2 pt-2 border-t border-border/50">
+              <SectionLabel>Assign shipper</SectionLabel>
+              <select
+                value={staffDraft.op}
+                onChange={(e) => setStaffDraft((d) => ({ ...d, op: e.target.value }))}
+                className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
+              >
+                <option value="">Select staff…</option>
+                {staff.map((op) => (
+                  <option key={op.id} value={op.id}>{op.name}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={staffDraft.date}
+                min={todayStr}
+                onChange={(e) => setStaffDraft((d) => ({ ...d, date: e.target.value }))}
+                className="w-full h-8 text-[11px] border border-input bg-transparent px-2 outline-none"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 h-8 text-[11px]"
+                  disabled={!staffDraft.op || !staffDraft.date}
+                  onClick={() => {
+                    onAssignShipper?.(staffDraft.op, staffDraft.date);
                     resetForm();
                     onOpenChange(false);
                   }}

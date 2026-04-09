@@ -9,23 +9,50 @@
  *   Triage:   lead, confirmed, accepted, rejected, cancelled, deferred
  *   Pipeline: pending_visit, pending_allocation, pending_shipment,
  *             pending_deployment, deployed
+ *
+ * Kanban columns (five): Sales, Customer Success, Allocation, Shipment,
+ * Deployment — `deployed` leads stay in the Deployment column with a badge.
  */
 
 import type { OpsLead, OpsStaff, OpsLocation, OpsLeadAssignment } from "@/lib/api/browser-api";
+
+// ---------------------------------------------------------------------------
+// Metadata keys (PATCH replaces whole metadata — always merge client-side)
+// ---------------------------------------------------------------------------
+
+export const META_VISIT_VERIFIER_ROLE = "visit_verifier_role";
+export const META_VISIT_SECONDARY_STAFF_ID = "visit_secondary_staff_id";
+export const META_VISIT_SECONDARY_SCHEDULED_DATE = "visit_secondary_scheduled_date";
+export const META_VISIT_SECONDARY_ROLE = "visit_secondary_role";
+export const META_SHIPMENT_EXPECTED_DELIVERY = "shipment_expected_delivery_date";
+export const META_SHIPMENT_CARRIER = "shipment_carrier";
+export const META_SHIPMENT_TRACKING = "shipment_tracking";
+export const META_SHIPMENT_LOGISTICS_NOTES = "shipment_logistics_notes";
+export const META_DEPLOYMENT_CREW = "deployment_crew";
+
+export type VisitRole = "customer_success" | "chief_operator";
+
+export type DeploymentCrewRole = "operator" | "chief_operator";
+
+/** Merge into existing lead.metadata before PATCH (server replaces jsonb wholesale). */
+export function mergeOpsLeadMetadata(
+  existing: Record<string, unknown> | undefined,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...(existing ?? {}), ...patch };
+}
 
 // ---------------------------------------------------------------------------
 // Canonical status enum (mirrors backend LeadStatus)
 // ---------------------------------------------------------------------------
 
 export const LeadStatus = {
-  // Triage
   LEAD: "lead",
   CONFIRMED: "confirmed",
   ACCEPTED: "accepted",
   REJECTED: "rejected",
   CANCELLED: "cancelled",
   DEFERRED: "deferred",
-  // Pipeline
   PENDING_VISIT: "pending_visit",
   PENDING_ALLOCATION: "pending_allocation",
   PENDING_SHIPMENT: "pending_shipment",
@@ -35,17 +62,14 @@ export const LeadStatus = {
 
 export type LeadStatusValue = (typeof LeadStatus)[keyof typeof LeadStatus];
 
-/** Raw statuses still in the Sales column (not yet accepted into CS). `accepted` is CS queue. */
 export const TRIAGE_STATUSES: Set<string> = new Set([
-  LeadStatus.LEAD,
-  LeadStatus.CONFIRMED,
-  LeadStatus.REJECTED,
-  LeadStatus.CANCELLED,
-  LeadStatus.DEFERRED,
+  LeadStatus.LEAD, LeadStatus.CONFIRMED, LeadStatus.ACCEPTED,
+  LeadStatus.REJECTED, LeadStatus.CANCELLED, LeadStatus.DEFERRED,
 ]);
 
+/** Hide only closed lost leads from the board; deployed stays in Deployment column. */
 export const TERMINAL_STATUSES: Set<string> = new Set([
-  LeadStatus.REJECTED, LeadStatus.CANCELLED, LeadStatus.DEPLOYED,
+  LeadStatus.REJECTED, LeadStatus.CANCELLED,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -53,32 +77,19 @@ export const TERMINAL_STATUSES: Set<string> = new Set([
 // ---------------------------------------------------------------------------
 
 export type LeadStage =
-  | "Leads"
-  | "Pending Visit"
-  | "Pending Allocation"
-  | "Pending Shipment"
-  | "Pending Deployment";
+  | "Sales"
+  | "Customer Success"
+  | "Allocation"
+  | "Shipment"
+  | "Deployment";
 
-/** User-facing column titles (internal `LeadStage` keys stay API-stable). */
-export const STAGE_DISPLAY_LABEL: Record<LeadStage, string> = {
-  Leads: "Sales",
-  "Pending Visit": "Customer Success (CS)",
-  "Pending Allocation": "Allocation",
-  "Pending Shipment": "Shipment",
-  "Pending Deployment": "Deployment",
-};
-
-/** Short column subtitles for the kanban header. */
-export const STAGE_COLUMN_DESCRIPTION: Record<LeadStage, string> = {
-  Leads: "Referrals from sales — triage & accept",
-  "Pending Visit": "Assign operators; verify real on-site potential vs. claimed headcount",
-  "Pending Allocation": "Admins allocate devices from hubs (map above)",
-  "Pending Shipment": "Ship to site — then hand off to deployment ops",
-  "Pending Deployment": "Ops on the factory floor — schedule & confirm go-live",
-};
-
-/** Triage sub-badge shown inside the Leads column. */
 export type TriageBadge = "New" | "Confirmed" | "Accepted" | "Deferred" | "Rejected" | "Cancelled";
+
+export interface DeploymentCrewMember {
+  staffId: string;
+  name: string;
+  role: DeploymentCrewRole;
+}
 
 export interface Lead {
   id: string;
@@ -87,9 +98,7 @@ export interface Lead {
   headcount: number;
   duration: number;
   stage: LeadStage;
-  /** Raw API status for action dispatch. */
   status: string;
-  /** Triage sub-badge (only meaningful when stage === "Leads"). */
   triageBadge?: TriageBadge;
   rep: string;
   repId: string;
@@ -98,20 +107,29 @@ export interface Lead {
   plannedStart?: string;
   plannedEnd?: string;
   deviceCount?: number;
-  /* Assignments — populated from ops.lead_assignments, not metadata */
+  rawMetadata: Record<string, unknown>;
   verifier?: string;
   verifierStaffId?: string;
   visitDate?: string;
+  /** Role of the person in the verifier assignment row (from metadata). */
+  visitVerifierRole?: VisitRole;
+  visitSecondaryStaffId?: string;
+  visitSecondaryName?: string;
+  visitSecondaryDate?: string;
+  visitSecondaryRole?: VisitRole;
   shipper?: string;
   shipperStaffId?: string;
   deployer?: string;
   deployerStaffId?: string;
   deployDate?: string;
   deployTime?: string;
-  /* Deployment — created at allocation time */
   deploymentRegion?: string;
   deploymentDeviceCount?: number;
-  /* Factory profile fields */
+  shipmentExpectedDelivery?: string;
+  shipmentCarrier?: string;
+  shipmentTracking?: string;
+  shipmentLogisticsNotes?: string;
+  deploymentCrew: DeploymentCrewMember[];
   address?: string;
   industry?: string;
   shifts?: number;
@@ -136,17 +154,41 @@ export interface Operator {
   role?: string;
 }
 
+function parseVisitRole(v: unknown): VisitRole | undefined {
+  if (v === "customer_success" || v === "chief_operator") return v;
+  return undefined;
+}
+
+function parseCrew(raw: unknown, staffLookup: Map<string, string>): DeploymentCrewMember[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DeploymentCrewMember[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    const sid = typeof o.staff_id === "string" ? o.staff_id : typeof o.staffId === "string" ? o.staffId : "";
+    if (!sid) continue;
+    const role = o.role === "chief_operator" ? "chief_operator" : "operator";
+    out.push({
+      staffId: sid,
+      name: staffLookup.get(sid) ?? sid,
+      role,
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // API → UI adapters
 // ---------------------------------------------------------------------------
 
 const STATUS_TO_STAGE: Record<string, LeadStage> = {
-  /** Accepted into pipeline — queue in CS to assign someone to verify the site. */
-  accepted: "Pending Visit",
-  pending_visit: "Pending Visit",
-  pending_allocation: "Pending Allocation",
-  pending_shipment: "Pending Shipment",
-  pending_deployment: "Pending Deployment",
+  /** Accepted deals leave Sales; scheduling happens only in the CS column. */
+  accepted: "Customer Success",
+  pending_visit: "Customer Success",
+  pending_allocation: "Allocation",
+  pending_shipment: "Shipment",
+  pending_deployment: "Deployment",
+  deployed: "Deployment",
 };
 
 const STATUS_TO_TRIAGE_BADGE: Record<string, TriageBadge> = {
@@ -158,14 +200,12 @@ const STATUS_TO_TRIAGE_BADGE: Record<string, TriageBadge> = {
   cancelled: "Cancelled",
 };
 
-/** Map an API lead + its assignments to the UI Lead type. */
 export function adaptLead(
   api: OpsLead,
   staffLookup: Map<string, string>,
   assignments?: OpsLeadAssignment[],
 ): Lead {
-  // Sales column: new referrals still in triage. `accepted` and pipeline statuses map to CS + downstream columns.
-  const stage: LeadStage = STATUS_TO_STAGE[api.status] ?? "Leads";
+  const stage: LeadStage = STATUS_TO_STAGE[api.status] ?? "Sales";
   const triageBadge: TriageBadge | undefined = STATUS_TO_TRIAGE_BADGE[api.status];
 
   const plannedStart = api.planned_start ?? undefined;
@@ -178,10 +218,16 @@ export function adaptLead(
         )
       : 0;
 
-  // Resolve assignments by type
   const verifierAssign = assignments?.find((a) => a.assignment_type === "verifier");
   const shipperAssign = assignments?.find((a) => a.assignment_type === "shipper");
   const deployerAssign = assignments?.find((a) => a.assignment_type === "deployer");
+
+  const m = api.metadata ?? {};
+  const visitVerifierRole = parseVisitRole(m[META_VISIT_VERIFIER_ROLE]);
+  const secId = typeof m[META_VISIT_SECONDARY_STAFF_ID] === "string" ? m[META_VISIT_SECONDARY_STAFF_ID] : undefined;
+  const secDate =
+    typeof m[META_VISIT_SECONDARY_SCHEDULED_DATE] === "string" ? m[META_VISIT_SECONDARY_SCHEDULED_DATE] : undefined;
+  const visitSecondaryRole = parseVisitRole(m[META_VISIT_SECONDARY_ROLE]);
 
   return {
     id: api.id,
@@ -199,28 +245,38 @@ export function adaptLead(
     plannedStart: plannedStart ?? undefined,
     plannedEnd: plannedEnd ?? undefined,
     deviceCount: api.device_count ?? undefined,
-    // Verifier (from lead_assignments)
+    rawMetadata: { ...m },
     verifier: verifierAssign
       ? staffLookup.get(verifierAssign.staff_id) ?? verifierAssign.staff_id
       : undefined,
     verifierStaffId: verifierAssign?.staff_id,
     visitDate: verifierAssign?.scheduled_date ?? undefined,
-    // Shipper (from lead_assignments)
+    visitVerifierRole,
+    visitSecondaryStaffId: secId,
+    visitSecondaryName: secId ? staffLookup.get(secId) ?? secId : undefined,
+    visitSecondaryDate: secDate,
+    visitSecondaryRole,
     shipper: shipperAssign
       ? staffLookup.get(shipperAssign.staff_id) ?? shipperAssign.staff_id
       : undefined,
     shipperStaffId: shipperAssign?.staff_id,
-    // Deployer (from lead_assignments)
     deployer: deployerAssign
       ? staffLookup.get(deployerAssign.staff_id) ?? deployerAssign.staff_id
       : undefined,
     deployerStaffId: deployerAssign?.staff_id,
     deployDate: deployerAssign?.scheduled_date ?? undefined,
     deployTime: deployerAssign?.scheduled_time ?? undefined,
-    // Deployment info — derived from lead fields after allocation
-    deploymentRegion: api.metadata?.deployment_id ? (api.city ?? undefined) : undefined,
-    deploymentDeviceCount: api.metadata?.deployment_id ? (api.device_count ?? undefined) : undefined,
-    // Factory profile
+    deploymentRegion:
+      m.deployment_id != null && String(m.deployment_id).length > 0 ? (api.city ?? undefined) : undefined,
+    deploymentDeviceCount:
+      m.deployment_id != null && String(m.deployment_id).length > 0 ? (api.device_count ?? undefined) : undefined,
+    shipmentExpectedDelivery:
+      typeof m[META_SHIPMENT_EXPECTED_DELIVERY] === "string" ? m[META_SHIPMENT_EXPECTED_DELIVERY] : undefined,
+    shipmentCarrier: typeof m[META_SHIPMENT_CARRIER] === "string" ? m[META_SHIPMENT_CARRIER] : undefined,
+    shipmentTracking: typeof m[META_SHIPMENT_TRACKING] === "string" ? m[META_SHIPMENT_TRACKING] : undefined,
+    shipmentLogisticsNotes:
+      typeof m[META_SHIPMENT_LOGISTICS_NOTES] === "string" ? m[META_SHIPMENT_LOGISTICS_NOTES] : undefined,
+    deploymentCrew: parseCrew(m[META_DEPLOYMENT_CREW], staffLookup),
     address: api.address ?? undefined,
     industry: api.industry ?? undefined,
     shifts: api.shifts ?? undefined,
@@ -231,50 +287,111 @@ export function adaptLead(
   };
 }
 
-/** Map API staff to the UI Operator type. */
 export function adaptStaff(staff: OpsStaff): Operator {
   return { name: staff.display_name, id: staff.id, role: staff.role ?? undefined };
 }
 
 // ---------------------------------------------------------------------------
-// Kanban transition rules — maps column transitions to required actions
+// Visit helpers — at least one site visitor required before verify
 // ---------------------------------------------------------------------------
 
-export type TransitionAction =
-  | "assign-verifier"
-  | "verify"
-  | "allocate"
-  | "deliver"
-  | "deploy";
+export function visitHasSiteVisitor(lead: Lead): boolean {
+  return Boolean(lead.verifierStaffId || lead.visitSecondaryStaffId);
+}
+
+export function visitHasCustomerSuccess(lead: Lead): boolean {
+  return lead.visitVerifierRole === "customer_success" || lead.visitSecondaryRole === "customer_success";
+}
+
+export function visitHasChiefOperator(lead: Lead): boolean {
+  return lead.visitVerifierRole === "chief_operator" || lead.visitSecondaryRole === "chief_operator";
+}
+
+export function visitCanAddSecondary(lead: Lead): boolean {
+  return Boolean(lead.verifierStaffId) && !lead.visitSecondaryStaffId;
+}
+
+/**
+ * Roles still needed for site visits (CS vs chief). Used to populate the role
+ * dropdown so the second slot cannot repeat a role that is already assigned.
+ */
+export function visitRolesStillNeeded(lead: Lead): VisitRole[] {
+  const need: VisitRole[] = [];
+  if (!visitHasCustomerSuccess(lead)) need.push("customer_success");
+  if (!visitHasChiefOperator(lead)) need.push("chief_operator");
+  return need;
+}
+
+/**
+ * Whether **Confirm deployed** may run: at least one `deployment_crew` member must exist
+ * on the lead (set via **Plan deployment crew**). The UI blocks deploy until then; backends
+ * should reject `POST .../deploy` if crew is missing for defense in depth.
+ */
+export function canConfirmDeploymentComplete(lead: Lead): boolean {
+  return lead.deploymentCrew.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Kanban transition rules
+// ---------------------------------------------------------------------------
+
+export type TransitionAction = "assign-verifier" | "verify" | "allocate" | "deliver";
 
 export interface TransitionRule {
   action: TransitionAction;
   needsInput: boolean;
 }
 
-/** Valid forward-only column transitions with the required pipeline action. */
 export const VALID_TRANSITIONS: Record<string, TransitionRule> = {
-  "Leads->Pending Visit": { action: "assign-verifier", needsInput: true },
-  "Pending Visit->Pending Allocation": { action: "verify", needsInput: false },
-  "Pending Allocation->Pending Shipment": { action: "allocate", needsInput: true },
-  "Pending Shipment->Pending Deployment": { action: "deliver", needsInput: false },
-  "Pending Deployment->deployed": { action: "deploy", needsInput: false },
+  "Sales->Customer Success": { action: "assign-verifier", needsInput: true },
+  "Customer Success->Allocation": { action: "verify", needsInput: false },
+  "Allocation->Shipment": { action: "allocate", needsInput: true },
+  "Shipment->Deployment": { action: "deliver", needsInput: false },
 };
 
 export function getTransitionRule(from: LeadStage, to: LeadStage): TransitionRule | null {
   return VALID_TRANSITIONS[`${from}->${to}`] ?? null;
 }
 
-/**
- * Sales column is action-only (accept / reject / defer) — no drag.
- * CS onward supports drag-to-advance where transitions allow it.
- */
+export function mapVisualStatusForLead(lead: Lead): string {
+  if (lead.stage === "Deployment") {
+    return lead.status === "deployed" ? "deployed" : "deploying";
+  }
+  if (lead.stage === "Sales") return "new";
+  if (lead.stage === "Customer Success") return "new";
+  if (lead.stage === "Allocation") return "allocating";
+  if (lead.stage === "Shipment") return "shipping";
+  return "new";
+}
+
+const MAP_VISUAL_STATUS_RANK: Record<string, number> = {
+  new: 0,
+  allocating: 1,
+  shipping: 2,
+  deploying: 3,
+  deployed: 4,
+};
+
+export function maxMapVisualStatus(statuses: string[]): string {
+  let best = "new";
+  let bestRank = -1;
+  for (const s of statuses) {
+    const r = MAP_VISUAL_STATUS_RANK[s] ?? 0;
+    if (r > bestRank) {
+      bestRank = r;
+      best = s;
+    }
+  }
+  return best;
+}
+
 export function canDrag(lead: Lead): boolean {
-  if (lead.stage === "Leads") return false;
+  if (lead.status === "deployed") return false;
+  /** Sales holds pre-accept triage only; moves to CS happen after accept (status + column). */
+  if (lead.stage === "Sales") return false;
   return true;
 }
 
-/** Map API location to the UI DeviceNode type for the map. */
 export function adaptLocation(loc: OpsLocation): DeviceNode | null {
   if (!loc.lat || !loc.lng) return null;
   return {
@@ -287,7 +404,6 @@ export function adaptLocation(loc: OpsLocation): DeviceNode | null {
   };
 }
 
-/** Lat/lng lookup by city name — used as fallback when lead has no lat/lng. */
 export const CITY_COORDS: Record<string, [number, number]> = {
   Delhi: [28.6139, 77.209],
   Mumbai: [19.076, 72.8777],

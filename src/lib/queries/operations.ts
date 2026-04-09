@@ -18,10 +18,12 @@ import {
   fetchOpsStaffByRole,
   fetchOpsTaskChecklists,
   rejectOpsLead,
+  updateOpsLead,
   upsertOpsTaskChecklist,
   verifyOpsLead,
   type OpsChecklistItem,
 } from "@/lib/api/browser-api";
+import { META } from "@/lib/ops/lead-metadata";
 import { operationsKeys } from "@/lib/queries/keys";
 
 export function useOpsLeads() {
@@ -125,6 +127,73 @@ export function useVerifyOpsLead() {
     onSettled: () => {
       invalidateLeads(qc);
       qc.invalidateQueries({ queryKey: operationsKeys.opsSites() });
+    },
+  });
+}
+
+/** CS verification: API verify + persist on-ground headcount for allocation column. */
+export function useVerifyOpsLeadWithCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      leadId,
+      verifiedWorkerCount,
+    }: {
+      leadId: string;
+      verifiedWorkerCount: number;
+    }) => {
+      await verifyOpsLead(leadId);
+      const list = await fetchOpsLeads();
+      const raw = list.items.find((l) => l.id === leadId);
+      const merged = {
+        ...(raw?.metadata ?? {}),
+        [META.VERIFIED_WORKER_COUNT]: verifiedWorkerCount,
+      };
+      return updateOpsLead(leadId, {
+        worker_count: verifiedWorkerCount,
+        metadata: merged,
+      });
+    },
+    onSettled: () => {
+      invalidateLeads(qc);
+      qc.invalidateQueries({ queryKey: operationsKeys.opsSites() });
+    },
+  });
+}
+
+/** Shallow-merge keys into existing lead metadata (fetches current list first). */
+export function useMergeOpsLeadMetadata() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      leadId,
+      patch,
+    }: {
+      leadId: string;
+      patch: Record<string, unknown>;
+    }) => {
+      const list = await fetchOpsLeads();
+      const raw = list.items.find((l) => l.id === leadId);
+      const merged = { ...(raw?.metadata ?? {}), ...patch };
+      return updateOpsLead(leadId, { metadata: merged });
+    },
+    onSettled: () => invalidateLeads(qc),
+  });
+}
+
+/** PATCH lead (metadata merge should be done by caller — server replaces jsonb). */
+export function useUpdateOpsLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      leadId,
+      body,
+    }: {
+      leadId: string;
+      body: Parameters<typeof updateOpsLead>[1];
+    }) => updateOpsLead(leadId, body),
+    onSettled: () => {
+      invalidateLeads(qc);
     },
   });
 }
