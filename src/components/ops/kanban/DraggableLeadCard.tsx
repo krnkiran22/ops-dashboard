@@ -21,6 +21,7 @@ interface DraggableLeadCardProps {
   onOpenShipmentDetails?: () => void;
   onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
+  onRemoveManual?: () => void;
 }
 
 /**
@@ -42,6 +43,7 @@ export function DraggableLeadCard({
   onOpenShipmentDetails,
   onOpenDeploymentPrep,
   onConfirmDeploy,
+  onRemoveManual,
 }: DraggableLeadCardProps) {
   const draggable = canDrag(lead);
 
@@ -80,6 +82,7 @@ export function DraggableLeadCard({
         onOpenShipmentDetails={onOpenShipmentDetails}
         onOpenDeploymentPrep={onOpenDeploymentPrep}
         onConfirmDeploy={onConfirmDeploy}
+        onRemoveManual={onRemoveManual}
       />
     </div>
   );

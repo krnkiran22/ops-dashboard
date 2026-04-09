@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import {
   DndContext,
   DragOverlay,
@@ -49,6 +51,9 @@ interface KanbanBoardProps {
   onOpenShipmentDetails: (leadId: string) => void;
   onOpenDeploymentPrep: (leadId: string) => void;
   onConfirmDeploy: (leadId: string) => void;
+  onAddManualSales?: () => void;
+  onAddManualDeployment?: () => void;
+  onRemoveManual?: (leadId: string) => void;
 }
 
 /**
@@ -71,6 +76,9 @@ export function KanbanBoard({
   onOpenShipmentDetails,
   onOpenDeploymentPrep,
   onConfirmDeploy,
+  onAddManualSales,
+  onAddManualDeployment,
+  onRemoveManual,
 }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
@@ -134,6 +142,33 @@ export function KanbanBoard({
           {STAGES.map((stage) => {
             const stageLeads = leads.filter((l) => l.stage === stage.key);
 
+            const addButton =
+              stage.key === "Sales" && onAddManualSales ? (
+                <button
+                  type="button"
+                  title="Add local lead"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddManualSales();
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                >
+                  <HugeiconsIcon icon={Add01Icon} className="size-3.5" strokeWidth={2} />
+                </button>
+              ) : stage.key === "Deployment" && onAddManualDeployment ? (
+                <button
+                  type="button"
+                  title="Add local deployment"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddManualDeployment();
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                >
+                  <HugeiconsIcon icon={Add01Icon} className="size-3.5" strokeWidth={2} />
+                </button>
+              ) : undefined;
+
             return (
               <KanbanColumn
                 key={stage.key}
@@ -142,6 +177,7 @@ export function KanbanBoard({
                 accent={stage.accent}
                 count={stageLeads.length}
                 isLoading={isLoading}
+                headerRight={addButton}
               >
                 {stageLeads.map((lead) => (
                   <DraggableLeadCard
@@ -161,6 +197,7 @@ export function KanbanBoard({
                     onOpenShipmentDetails={() => onOpenShipmentDetails(lead.id)}
                     onOpenDeploymentPrep={() => onOpenDeploymentPrep(lead.id)}
                     onConfirmDeploy={() => onConfirmDeploy(lead.id)}
+                    onRemoveManual={onRemoveManual ? () => onRemoveManual(lead.id) : undefined}
                   />
                 ))}
               </KanbanColumn>
@@ -202,6 +239,7 @@ export function KanbanBoard({
           onOpenShipmentDetails={() => onOpenShipmentDetails(detailLead.id)}
           onOpenDeploymentPrep={() => onOpenDeploymentPrep(detailLead.id)}
           onConfirmDeploy={() => onConfirmDeploy(detailLead.id)}
+          onRemoveManual={onRemoveManual ? () => onRemoveManual(detailLead.id) : undefined}
         />
       )}
     </>

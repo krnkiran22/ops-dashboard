@@ -36,9 +36,11 @@ import {
   META_SHIPMENT_TRACKING,
   META_SHIPMENT_LOGISTICS_NOTES,
   META_DEPLOYMENT_CREW,
+  isManualLead,
   type VisitRole,
 } from "./ops-kanban-data";
 import { KanbanBoard } from "./KanbanBoard";
+import { ManualEntryDialog } from "./ManualEntryDialog";
 import { ShipmentLogisticsDialog, type ShipmentLogisticsFields } from "./ShipmentLogisticsDialog";
 import { DeploymentPrepDialog, type CrewDraftRow } from "./DeploymentPrepDialog";
 import { UtilizationPanel } from "@/components/ops/inventory/UtilizationPanel";
@@ -60,6 +62,12 @@ import {
   useDeployOpsLead,
   useUpdateOpsLead,
 } from "@/lib/queries/operations";
+import { useManualLeads } from "@/hooks/use-manual-leads";
+import {
+  isManualLeadId,
+  manualRecordToLead,
+  type ManualLeadKind,
+} from "@/lib/ops/manual-leads-storage";
 
 const DeviceDeploymentMap = dynamic(
   () =>
@@ -122,8 +130,15 @@ export function OpsKanbanPage() {
 
   const assignmentsQuery = useOpsLeadAssignments(leadIds);
 
+  const { records: manualRecords, add: addManualRecord, remove: removeManual } = useManualLeads();
+
+  const manualLeadsUi = useMemo(
+    () => manualRecords.map(manualRecordToLead),
+    [manualRecords],
+  );
+
   // ── Adapt API data to UI types ──
-  const leads: Lead[] = useMemo(() => {
+  const apiLeads: Lead[] = useMemo(() => {
     const items = leadsQuery.data?.items;
     if (!items) return [];
     const assignmentsMap = assignmentsQuery.data;
@@ -131,6 +146,11 @@ export function OpsKanbanPage() {
       .filter((api) => !TERMINAL_STATUSES.has(api.status))
       .map((api) => adaptLead(api, staffLookup, assignmentsMap?.get(api.id)));
   }, [leadsQuery.data, staffLookup, assignmentsQuery.data]);
+
+  const leads: Lead[] = useMemo(
+    () => [...manualLeadsUi, ...apiLeads],
+    [manualLeadsUi, apiLeads],
+  );
 
   const deviceNodes = useMemo(() => {
     const items = locationsQuery.data?.items;
@@ -146,6 +166,7 @@ export function OpsKanbanPage() {
   const [allocatingLead, setAllocatingLead] = useState<Lead | null>(null);
   const [shipmentDialogLeadId, setShipmentDialogLeadId] = useState<string | null>(null);
   const [deploymentDialogLeadId, setDeploymentDialogLeadId] = useState<string | null>(null);
+  const [manualDialogKind, setManualDialogKind] = useState<ManualLeadKind | null>(null);
 
   const rawLead = useCallback(
     (leadId: string) => leadsQuery.data?.items.find((l) => l.id === leadId),
@@ -154,6 +175,7 @@ export function OpsKanbanPage() {
 
   const handleAssignVisitPrimary = useCallback(
     async (leadId: string, staffId: string, date: string, role: VisitRole) => {
+      if (isManualLeadId(leadId)) return;
       const raw = rawLead(leadId);
       if (!raw) return;
       try {
@@ -179,6 +201,7 @@ export function OpsKanbanPage() {
 
   const handleAssignVisitSecondary = useCallback(
     (leadId: string, staffId: string, date: string, role: VisitRole) => {
+      if (isManualLeadId(leadId)) return;
       const raw = rawLead(leadId);
       if (!raw) return;
       updateLead.mutate({
@@ -197,6 +220,7 @@ export function OpsKanbanPage() {
 
   const handleShipmentLogisticsSave = useCallback(
     (leadId: string, fields: ShipmentLogisticsFields) => {
+      if (isManualLeadId(leadId)) return;
       const raw = rawLead(leadId);
       if (!raw) return;
       updateLead.mutate({
@@ -216,6 +240,7 @@ export function OpsKanbanPage() {
 
   const handleDeploymentPrepConfirm = useCallback(
     async (leadId: string, crew: CrewDraftRow[], scheduledDate: string, scheduledTime: string) => {
+      if (isManualLeadId(leadId)) return;
       const raw = rawLead(leadId);
       if (!raw || crew.length === 0) return;
       const chiefFirst = crew.find((c) => c.role === "chief_operator") ?? crew[0];
@@ -338,7 +363,10 @@ export function OpsKanbanPage() {
   // ── Handlers ──
   const handleAllocateConfirm = useCallback(
     (sourceCity: string, quantity: number) => {
-      if (!allocatingLead) return;
+      if (!allocatingLead || isManualLead(allocatingLead)) {
+        setAllocatingLead(null);
+        return;
+      }
       const sourceNode = deviceNodes.find((n) => n.city === sourceCity);
       if (sourceNode) {
         allocateLead.mutate({
@@ -354,6 +382,7 @@ export function OpsKanbanPage() {
   );
 
   const handleStartAllocate = useCallback((lead: Lead) => {
+    if (isManualLead(lead)) return;
     setAllocatingLead(lead);
     setSelectedLeadId(null);
   }, []);
@@ -487,20 +516,42 @@ export function OpsKanbanPage() {
               isLoading={leadsQuery.isLoading}
               selectedLeadId={selectedLeadId}
               onSelectLead={setSelectedLeadId}
-              onAccept={(id) => acceptLead.mutate(id)}
-              onReject={(id) => rejectLead.mutate(id)}
+              onAccept={(id) => {
+                if (isManualLeadId(id)) return;
+                acceptLead.mutate(id);
+              }}
+              onReject={(id) => {
+                if (isManualLeadId(id)) return;
+                rejectLead.mutate(id);
+              }}
               onAssignVisitPrimary={handleAssignVisitPrimary}
               onAssignVisitSecondary={handleAssignVisitSecondary}
-              onMarkVerified={(id) => verifyLead.mutate(id)}
+              onMarkVerified={(id) => {
+                if (isManualLeadId(id)) return;
+                verifyLead.mutate(id);
+              }}
               onAllocate={(leadId) => {
                 const lead = leads.find((l) => l.id === leadId);
                 if (lead) handleStartAllocate(lead);
               }}
-              onMarkDispatched={(id) => dispatchLead.mutate(id)}
-              onMarkDelivered={(id) => deliverLead.mutate(id)}
-              onOpenShipmentDetails={setShipmentDialogLeadId}
-              onOpenDeploymentPrep={setDeploymentDialogLeadId}
-              onConfirmDeploy={(id) =>
+              onMarkDispatched={(id) => {
+                if (isManualLeadId(id)) return;
+                dispatchLead.mutate(id);
+              }}
+              onMarkDelivered={(id) => {
+                if (isManualLeadId(id)) return;
+                deliverLead.mutate(id);
+              }}
+              onOpenShipmentDetails={(id) => {
+                if (isManualLeadId(id)) return;
+                setShipmentDialogLeadId(id);
+              }}
+              onOpenDeploymentPrep={(id) => {
+                if (isManualLeadId(id)) return;
+                setDeploymentDialogLeadId(id);
+              }}
+              onConfirmDeploy={(id) => {
+                if (isManualLeadId(id)) return;
                 deployLead.mutate(id, {
                   onError: (err) => {
                     const msg =
@@ -512,8 +563,11 @@ export function OpsKanbanPage() {
                           : "Deploy failed";
                     window.alert(msg);
                   },
-                })
-              }
+                });
+              }}
+              onAddManualSales={() => setManualDialogKind("sales")}
+              onAddManualDeployment={() => setManualDialogKind("deployment")}
+              onRemoveManual={(id) => removeManual(id)}
             />
           </div>
         </ResizablePanel>
@@ -531,6 +585,17 @@ export function OpsKanbanPage() {
         staff={assignableStaff}
         onOpenChange={(open) => { if (!open) setDeploymentDialogLeadId(null); }}
         onConfirm={(leadId, crew, date, time) => void handleDeploymentPrepConfirm(leadId, crew, date, time)}
+      />
+      <ManualEntryDialog
+        open={manualDialogKind !== null}
+        onOpenChange={(open) => {
+          if (!open) setManualDialogKind(null);
+        }}
+        kind={manualDialogKind ?? "sales"}
+        onSubmit={(payload) => {
+          if (!manualDialogKind) return;
+          addManualRecord(manualDialogKind, payload);
+        }}
       />
     </div>
   );

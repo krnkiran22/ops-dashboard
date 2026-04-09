@@ -390,7 +390,12 @@ export function maxMapVisualStatus(statuses: string[]): string {
   return best;
 }
 
+export function isManualLead(lead: Lead): boolean {
+  return lead.rawMetadata?.manual_entry === true;
+}
+
 export function canDrag(lead: Lead): boolean {
+  if (isManualLead(lead)) return false;
   if (lead.status === "deployed") return false;
   /** Sales holds pre-accept triage only; moves to CS happen after accept (status + column). */
   if (lead.stage === "Sales") return false;

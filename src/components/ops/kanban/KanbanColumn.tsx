@@ -10,6 +10,8 @@ interface KanbanColumnProps {
   count: number;
   isLoading?: boolean;
   isOver?: boolean;
+  /** e.g. “add local entry” control */
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -22,6 +24,7 @@ export function KanbanColumn({
   accent,
   count,
   isLoading,
+  headerRight,
   children,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -34,13 +37,16 @@ export function KanbanColumn({
       <div className="shrink-0 border-b border-border">
         <div className={`h-[2px] ${accent}`} />
         <div className="px-3 py-2">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-foreground">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-foreground truncate">
               {label}
             </h2>
-            <span className="text-[10px] tabular-nums text-muted-foreground">
+            <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
               {count}
             </span>
+            {headerRight != null && (
+              <span className="ml-auto shrink-0 flex items-center">{headerRight}</span>
+            )}
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
   visitCanAddSecondary,
   visitRolesStillNeeded,
   canConfirmDeploymentComplete,
+  isManualLead,
 } from "./ops-kanban-data";
 
 const STAGE_ACCENT: Record<Lead["stage"], string> = {
@@ -40,6 +41,7 @@ interface Props {
   onOpenShipmentDetails?: () => void;
   onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
+  onRemoveManual?: () => void;
 }
 
 /**
@@ -61,6 +63,7 @@ export function LeadDetailDialog({
   onOpenShipmentDetails,
   onOpenDeploymentPrep,
   onConfirmDeploy,
+  onRemoveManual,
 }: Props) {
   const [staffDraft, setStaffDraft] = useState({ op: "", date: "", time: "" });
   const [showAssignForm, setShowAssignForm] = useState<"visit" | null>(null);
@@ -80,6 +83,7 @@ export function LeadDetailDialog({
   const stillNeeded = visitRolesStillNeeded(lead);
   const showAddFirstVisitor = canPrimaryVisit;
   const showAddSecondVisitor = canSecondaryVisit && stillNeeded.length > 0;
+  const manual = isManualLead(lead);
 
   const openVisit = (slot: "primary" | "secondary") => {
     const needed = visitRolesStillNeeded(lead);
@@ -201,7 +205,29 @@ export function LeadDetailDialog({
         )}
 
         <div className="pt-3 border-t border-border space-y-2">
-          {lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
+          {manual && (
+            <>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Local-only entry in this browser — not synced to the server.
+              </p>
+              {onRemoveManual && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="w-full h-8 text-[11px]"
+                  onClick={() => {
+                    if (window.confirm(`Remove "${lead.site}" from this board?`)) {
+                      onRemoveManual();
+                      onOpenChange(false);
+                    }
+                  }}
+                >
+                  Remove from board
+                </Button>
+              )}
+            </>
+          )}
+          {!manual && lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
             <div className="flex gap-2">
               <Button size="sm" className="flex-1 h-8 text-[11px]" onClick={() => { onAccept?.(); onOpenChange(false); }}>
                 Accept
@@ -214,7 +240,7 @@ export function LeadDetailDialog({
             </div>
           )}
 
-          {lead.stage === "Customer Success" && !showAssignForm && (
+          {!manual && lead.stage === "Customer Success" && !showAssignForm && (
             <>
               {!visitHasSiteVisitor(lead) && showAddFirstVisitor && (
                 <div className="flex flex-col gap-2">
@@ -250,13 +276,13 @@ export function LeadDetailDialog({
             </>
           )}
 
-          {lead.stage === "Allocation" && (
+          {!manual && lead.stage === "Allocation" && (
             <Button size="sm" className="w-full h-8 text-[11px]" onClick={() => { onAllocate?.(); onOpenChange(false); }}>
               Allocate devices
             </Button>
           )}
 
-          {lead.stage === "Shipment" && lead.status === "pending_shipment" && (
+          {!manual && lead.stage === "Shipment" && lead.status === "pending_shipment" && (
             <>
               <Button size="sm" variant="secondary" className="w-full h-8 text-[11px]" onClick={() => { onOpenShipmentDetails?.(); }}>
                 Shipment & logistics details
@@ -274,7 +300,7 @@ export function LeadDetailDialog({
             </>
           )}
 
-          {lead.stage === "Deployment" && lead.status === "pending_deployment" && (
+          {!manual && lead.stage === "Deployment" && lead.status === "pending_deployment" && (
             <>
               <Button size="sm" variant="outline" className="w-full h-8 text-[11px]" onClick={() => { onOpenDeploymentPrep?.(); }}>
                 Plan deployment crew
@@ -297,7 +323,7 @@ export function LeadDetailDialog({
             </>
           )}
 
-          {showAssignForm === "visit" && (
+          {!manual && showAssignForm === "visit" && (
             <div className="space-y-2 pt-2 border-t border-border/50">
               <SectionLabel>{visitSlot === "primary" ? "Primary visit" : "Additional visitor"}</SectionLabel>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Role</div>

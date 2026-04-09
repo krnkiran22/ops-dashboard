@@ -8,6 +8,7 @@ import {
   visitCanAddSecondary,
   visitRolesStillNeeded,
   canConfirmDeploymentComplete,
+  isManualLead,
 } from "./ops-kanban-data";
 
 const TRIAGE_BADGE_STYLE: Record<string, string> = {
@@ -49,6 +50,7 @@ interface LeadCardProps {
   onOpenShipmentDetails?: () => void;
   onOpenDeploymentPrep?: () => void;
   onConfirmDeploy?: () => void;
+  onRemoveManual?: () => void;
 }
 
 /**
@@ -71,6 +73,7 @@ export function LeadCard({
   onOpenShipmentDetails,
   onOpenDeploymentPrep,
   onConfirmDeploy,
+  onRemoveManual,
 }: LeadCardProps) {
   const [showForm, setShowForm] = useState<"visit" | null>(null);
   const [visitForm, setVisitForm] = useState<VisitFormState | null>(null);
@@ -101,6 +104,7 @@ export function LeadCard({
   const stillNeeded = visitRolesStillNeeded(lead);
   const showAddFirstVisitor = canPrimaryVisit;
   const showAddSecondVisitor = canSecondaryVisit && stillNeeded.length > 0;
+  const manual = isManualLead(lead);
 
   return (
     <div
@@ -220,7 +224,26 @@ export function LeadCard({
       )}
 
       <div className="mt-2 space-y-1.5" onClick={stop}>
-        {lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
+        {manual && (
+          <div className="rounded border border-dashed border-border/70 bg-muted/20 px-2 py-1.5 space-y-1.5">
+            <p className="text-[9px] text-muted-foreground leading-snug">
+              Local-only — not synced to the server. Cleared if you clear site data.
+            </p>
+            {onRemoveManual && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => {
+                  if (window.confirm(`Remove "${lead.site}" from this board?`)) onRemoveManual();
+                }}
+              >
+                Remove from board
+              </Button>
+            )}
+          </div>
+        )}
+        {!manual && lead.stage === "Sales" && (lead.status === "lead" || lead.status === "confirmed") && (
           <div className="flex gap-1.5">
             <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" onClick={onAccept}>
               Accept
@@ -238,7 +261,7 @@ export function LeadCard({
           </div>
         )}
 
-        {lead.stage === "Customer Success" && !showForm && (
+        {!manual && lead.stage === "Customer Success" && !showForm && (
           <>
             {!visitHasSiteVisitor(lead) && showAddFirstVisitor && (
               <div className="flex flex-col gap-1">
@@ -289,13 +312,13 @@ export function LeadCard({
           </>
         )}
 
-        {lead.stage === "Allocation" && (
+        {!manual && lead.stage === "Allocation" && (
           <Button size="sm" className="w-full h-7 text-[11px]" onClick={onAllocate}>
             Allocate devices
           </Button>
         )}
 
-        {lead.stage === "Shipment" && lead.status === "pending_shipment" && (
+        {!manual && lead.stage === "Shipment" && lead.status === "pending_shipment" && (
           <>
             <Button
               size="sm"
@@ -318,7 +341,7 @@ export function LeadCard({
           </>
         )}
 
-        {lead.stage === "Deployment" && lead.status === "pending_deployment" && (
+        {!manual && lead.stage === "Deployment" && lead.status === "pending_deployment" && (
           <>
             <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={onOpenDeploymentPrep}>
               Plan deployment crew
@@ -341,7 +364,7 @@ export function LeadCard({
           </>
         )}
 
-        {showForm === "visit" && visitForm && (
+        {!manual && showForm === "visit" && visitForm && (
           <div className="space-y-1.5 pt-1.5 border-t border-border/30 mt-1.5">
             <div className="text-[10px] font-semibold text-muted-foreground">
               {visitForm.slot === "primary" ? "Primary visit" : "Additional visitor"}
