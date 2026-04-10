@@ -1,14 +1,14 @@
 # Ops admin dashboard — backend API contract
 
-This document is for **backend engineers** implementing or extending APIs consumed by the **Build AI admin Operations page** (`/ops` in `apps/buildai-dashboard`): the map + five-column lead pipeline (Sales → Customer Success → Allocation → Shipment → Deployment), utilization sidebar, and task checklist settings.
+This document is for **backend engineers** implementing or extending APIs consumed by the **Build AI admin Operations UI** in **buildai-ops** at **`/admin`** (map + five-column lead pipeline: Sales → Customer Success → Allocation → Shipment → Deployment), utilization sidebar, and task checklist settings. That UI was **moved out of** `apps/buildai-dashboard` into this standalone app.
 
-**ops-dashboard** (`NEXT_PUBLIC_OPS_API_GATEWAY_VERSION`, default **`v2`**) and **buildai-dashboard** may use different gateway segments. Paths below are written as `/ops/...`; the full URL is `{api_origin}/{version}/ops/...` (e.g. `/v2/ops/leads`).
+**buildai-ops** (`NEXT_PUBLIC_OPS_API_GATEWAY_VERSION`, default **`v2`**) is the primary consumer. Paths below are written as `/ops/...`; the full URL is `{api_origin}/{version}/ops/...` (e.g. `/v2/ops/leads`).
 
 ---
 
 ## 1. Response envelope (how the dashboard parses JSON)
 
-The shared browser client (`normalizeEnvelopePayload` in `apps/buildai-dashboard/src/lib/api/browser-client.ts`) normalizes responses as follows:
+The browser client (`normalizeEnvelopePayload` in `src/lib/api/client.ts` in **buildai-ops**) normalizes responses as follows:
 
 | Server body shape | After normalization (what React Query / hooks see) |
 |-------------------|-----------------------------------------------------|
@@ -22,9 +22,9 @@ TypeScript fetch helpers for **POST pipeline actions** in `browser-api.ts` are w
 
 ---
 
-## 2. Complete HTTP surface (Ops `/ops` page)
+## 2. Complete HTTP surface (admin UI at **`/admin`** in buildai-ops)
 
-Paths in the table are under **`/ops`** on the gateway (e.g. `GET …/v2/ops/leads` when using v2). This table is the **full set** of methods and routes the kanban page, map, utilization sidebar, and checklist editor call via `browser-api.ts` + `operations.ts` hooks.
+Paths in the table are **API** routes under **`/ops`** on the gateway (e.g. `GET …/v2/ops/leads` when using v2) — not the Next.js route. This table is the **full set** of methods and routes the kanban page, map, utilization sidebar, and checklist editor call via `browser-api.ts` + `operations.ts` hooks.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -52,7 +52,7 @@ Paths in the table are under **`/ops`** on the gateway (e.g. `GET …/v2/ops/lea
 
 ## 3. Lead `status` → dashboard column
 
-The UI maps `ops.leads.status` to kanban columns (`apps/buildai-dashboard/src/components/ops/kanban/ops-kanban-data.ts`):
+The UI maps `ops.leads.status` to kanban columns (`src/components/ops/kanban/ops-kanban-data.ts` in **buildai-ops**):
 
 | `status` value | Column |
 |----------------|--------|
@@ -68,7 +68,7 @@ The UI maps `ops.leads.status` to kanban columns (`apps/buildai-dashboard/src/co
 
 ## 4. Core type: `OpsLead` (fields the dashboard reads)
 
-Defined in `apps/buildai-dashboard/src/lib/api/browser-api.ts` (`OpsLead`). The dashboard uses these fields:
+Defined in `src/lib/api/browser-api.ts` (`OpsLead`). The admin UI uses these fields:
 
 | Field | Type | Used for |
 |-------|------|----------|
@@ -383,12 +383,12 @@ If you add new UI that needs them, extend this doc.
 
 | Area | Path |
 |------|------|
-| TypeScript types & fetch URLs | `apps/buildai-dashboard/src/lib/api/browser-api.ts` |
-| React Query hooks / invalidation | `apps/buildai-dashboard/src/lib/queries/operations.ts` |
-| Column + metadata constants | `apps/buildai-dashboard/src/components/ops/kanban/ops-kanban-data.ts` |
-| Standalone ops app (same contract) | `ops-dashboard` repo: `src/lib/api/browser-api.ts`, `src/components/ops/kanban/` |
-| FastAPI routes (reference) | `apps/buildai-api/api/routers/ops/leads.py` |
-| Envelope helpers | `apps/buildai-api/api/foundation/envelopes.py`, `pagination.py` |
+| TypeScript types & fetch URLs | **buildai-ops** `src/lib/api/browser-api.ts` |
+| React Query hooks / invalidation | **buildai-ops** `src/lib/queries/operations.ts` |
+| Column + metadata constants | **buildai-ops** `src/components/ops/kanban/ops-kanban-data.ts` |
+| Admin Operations page route | **buildai-ops** `src/app/admin/page.tsx` → **`/admin`** |
+| FastAPI routes (reference) | Build AI monorepo `apps/buildai-api/api/routers/ops/leads.py` |
+| Envelope helpers | Build AI monorepo `apps/buildai-api/api/foundation/envelopes.py`, `pagination.py` |
 
 ---
 

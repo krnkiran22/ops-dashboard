@@ -1,6 +1,10 @@
-# ops-dashboard
+# buildai-ops
 
-Staff-facing ops portal (Next.js): operator tasks, sales map, and admin preview routes.
+Staff-facing ops portal (Next.js): operator tasks, sales map, and admin routes.
+
+The **admin Operations command center** (map + pipeline kanban) lives in this app at **`/admin`** — it was moved here from the main **buildai-dashboard** app.
+
+> npm package name: `buildai-ops`. The git remote folder may still be named `ops-dashboard` on disk.
 
 ## Local development
 

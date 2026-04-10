@@ -1,5 +1,5 @@
 /**
- * React Query key factory for ops CRM / kanban (mirrors dashboard `operationsKeys` slice).
+ * React Query key factory for ops CRM / kanban (buildai-ops admin `/admin`).
  */
 
 export const operationsKeys = {

@@ -1,6 +1,6 @@
 # Ops v2 Mock API Reference
 
-Mock backend for the Build AI admin **Operations** dashboard (`/ops` in **ops-dashboard**): kanban, map, utilization, checklists.
+Mock backend for the Build AI admin **Operations** UI in **buildai-ops** (route **`/admin`**): kanban, map, utilization, checklists.
 
 Serves static fixture data with in-memory mutations — no DB, no auth on the mock server. Intended for **frontend integration testing only**; state resets on restart.
 
@@ -12,13 +12,13 @@ Serves static fixture data with in-memory mutations — no DB, no auth on the mo
 
 ## Default backend in this repo
 
-**ops-dashboard** defaults to a **ngrok** API base when `NEXT_PUBLIC_BACKEND_API_URL` is unset (see `DEFAULT_TUNNEL_API_BASE_URL` in `src/lib/api/client.ts`). Use `.env.local` to override when the tunnel changes or to point at `:8765` / local Build AI.
+**buildai-ops** defaults to a **ngrok** API base when `NEXT_PUBLIC_BACKEND_API_URL` is unset (see `DEFAULT_TUNNEL_API_BASE_URL` in `src/lib/api/client.ts`). Use `.env.local` to override when the tunnel changes or to point at `:8765` / local Build AI.
 
 ---
 
 ## Wiring this repo to the mock
 
-In **ops-dashboard** root, copy `.env.local.example` → `.env.local` and use the **Ops v2 mock** block:
+In **buildai-ops** repo root, copy `.env.local.example` → `.env.local` and use the **Ops v2 mock** block:
 
 | Variable | Value for mock |
 |----------|----------------|
@@ -88,7 +88,7 @@ This app’s client normalises that to `{ items, total, has_more, page_size, nex
 
 ## Lead status → kanban column
 
-Matches the **ops-dashboard** kanban (`ops-kanban-data.ts`):
+Matches the **buildai-ops** kanban (`ops-kanban-data.ts`):
 
 | `status` | Column |
 |----------|--------|
@@ -212,7 +212,7 @@ curl -X POST "http://localhost:8765/v2/ops/leads/a0000001-0001-4000-8000-0000000
 
 Assign a shipper. Creates a `shipper` assignment record. Returns the assignment.
 
-**ops-dashboard** does not use this in the Shipment column (flow is **Dispatch** / **Deliver** only); the client still exposes `assignOpsShipper` for integration tests and parity with production.
+**buildai-ops** does not use this in the Shipment column (flow is **Dispatch** / **Deliver** only); the client still exposes `assignOpsShipper` for integration tests and parity with production.
 
 ```bash
 curl -X POST "http://localhost:8765/v2/ops/leads/a0000001-0001-4000-8000-000000000008/assign-shipper" \
@@ -373,7 +373,7 @@ curl -X PUT "http://localhost:8765/v2/ops/task-checklists/verifier" \
 
 ## Frontend integration notes
 
-1. **Base URL** — set API base to `http://localhost:8765` in **ops-dashboard** via `NEXT_PUBLIC_BACKEND_API_URL`.
+1. **Base URL** — set API base to `http://localhost:8765` in **buildai-ops** via `NEXT_PUBLIC_BACKEND_API_URL`.
 2. **Version prefix** — all paths are `/v2/ops/...`; the client builds `{base}/{NEXT_PUBLIC_OPS_API_GATEWAY_VERSION}/ops/...` and **defaults to `v2`**. Set `NEXT_PUBLIC_OPS_API_GATEWAY_VERSION=v1` only for legacy gateways.
 3. **No auth** — omit `Authorization`; set `NEXT_PUBLIC_OPS_SKIP_AUTH=true`.
 4. **State resets on restart** — mutations persist only in server memory. Restart uvicorn for clean fixtures.
@@ -382,7 +382,7 @@ curl -X PUT "http://localhost:8765/v2/ops/task-checklists/verifier" \
 
 ---
 
-## ops-dashboard client mapping (v2 mock)
+## buildai-ops client mapping (v2 mock)
 
 | Mock endpoint | `browser-api.ts` | `operations.ts` hook |
 |---------------|------------------|----------------------|
@@ -418,4 +418,4 @@ Not on the v2 mock (production / extended API only): `confirmOpsLead`, `cancelOp
 | Lead endpoints | `apps/buildai-api/api/routers/ops_mock/leads.py` |
 | Fixture JSON files | `apps/buildai-api/api/routers/ops_mock/fixtures/` |
 
-This **ops-dashboard** repo consumes the API only; Python mock lives in **Build AI** `apps/buildai-api`.
+This **buildai-ops** repo consumes the API only; Python mock lives in **Build AI** `apps/buildai-api`.

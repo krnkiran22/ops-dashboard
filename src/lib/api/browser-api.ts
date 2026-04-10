@@ -1,6 +1,6 @@
 /**
- * Ops CRM browser API — subset of the main dashboard `browser-api` used by
- * `OpsKanbanPage` and related components. Built on the shared `api` client.
+ * Ops CRM browser API — types and fetch helpers for `OpsKanbanPage` and related components
+ * in **buildai-ops** (historically shared with the monorepo dashboard). Built on the `api` client.
  *
  * Paths are relative to `{base}/{gateway}/ops` (e.g. `/v2/ops/leads` when the gateway
  * segment is `v2`). The v2 Python mock implements the routes in `docs/ops-v2-mock-api.md`.
